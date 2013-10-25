@@ -21,6 +21,7 @@
 #include <linux/time.h>
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
+#include <linux/kernel.h>
 #include "ext2.h"
 #include "xattr.h"
 #include "acl.h"
@@ -63,9 +64,29 @@ int ext2_fsync(struct file *file, loff_t start, loff_t end, int datasync)
  *  original: do_sync_read
  */
 ssize_t ext3301_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos) {
+	ssize_t ret;
+	ret = do_sync_read(filp, buf, len, ppos);	
 
-	return do_sync_read(filp, buf, len, ppos);	
+	//Check if the parent directory is marked for encryption
+	
+
+	return ret; 
 }
+
+//
+//
+//filp->f_path.dentry->d_parent (->d_name.name)
+//
+//printk(KERN_DEBUG "Wrote file %s in directory %s\n",
+//	filp->f_path.dentry->d_name.name,
+//	filp->f_path.dentry->d_parent->d_name.name
+//);	
+//
+//printk(KERN_DEBUG "Wrote file, is %s == %s?\n",
+//	dsearch->d_name.name, crypter_dir
+//);
+//
+//
 
 /*
  * ext3301 variant of the standard file write function.
@@ -73,8 +94,26 @@ ssize_t ext3301_read(struct file *filp, char __user *buf, size_t len, loff_t *pp
  *  original: do_sync_write
  */
 ssize_t ext3301_write(struct file *filp, char __user *buf, size_t len, loff_t *ppos) {
+	ssize_t ret;
+	struct dentry * dsearch;
+	struct dentry * dtop;
+	ret = do_sync_write(filp, buf, len, ppos);	
 
-	return do_sync_write(filp, buf, len, ppos);	
+	//Check if the parent directory is marked for encryption
+	dtop = filp->f_path.dentry;
+	do {
+		dsearch = dtop;
+		dtop = dtop->d_parent;
+	} while (dtop != dtop->d_parent);
+	if (strcmp(crypter_dir, dsearch->d_name.name)==0) {
+		//Encrypt the data being written
+		//
+		//
+		printk(KERN_DEBUG "Writing to encrypted file %s\n",
+			filp->f_path.dentry->d_name.name);
+	}
+
+	return ret; 
 }
 
 

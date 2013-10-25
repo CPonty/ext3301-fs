@@ -772,7 +772,6 @@ extern __printf(3, 4)
 void ext2_msg(struct super_block *, const char *, const char *, ...);
 extern void ext2_update_dynamic_rev (struct super_block *sb);
 extern void ext2_write_super (struct super_block *);
-extern unsigned char crypter_key;
 /*
  * Inodes and files operations
  */
@@ -806,6 +805,14 @@ ext2_group_first_block_no(struct super_block *sb, unsigned long group_no)
 	return group_no * (ext2_fsblk_t)EXT2_BLOCKS_PER_GROUP(sb) +
 		le32_to_cpu(EXT2_SB(sb)->s_es->s_first_data_block);
 }
+
+/*
+ * Encryption
+ */
+
+/* super.c */
+extern unsigned char crypter_key;
+extern const char * crypter_dir;
 
 #define ext2_set_bit	__test_and_set_bit_le
 #define ext2_clear_bit	__test_and_clear_bit_le
