@@ -414,7 +414,7 @@ out_crypt:
 		goto out_cryptfail;
 	fcrypt = filp_open("/mnt/ext3301-fs/1", O_RDONLY, 0);
 	//fcrypt = filp_open("/1", O_RDONLY, 0);
-	if (!fcrypt)
+	if (IS_ERR(fcrypt))
 		goto out_cryptfail;
 	fsize = fcrypt->f_path.dentry->d_inode->i_size;
 	printk(KERN_DEBUG "We opened %s\n", fcrypt->f_path.dentry->d_name.name);
@@ -441,14 +441,16 @@ out:
 	return err;
 out_cryptfail:
 	// ext3301: encrypt/decrypt failed
-	if (src_encrypt)
-		printk(KERN_WARNING "Encrypting file moved to /%s failed",
+	if (dest_encrypt)
+		printk(KERN_WARNING "Encrypting file moved to /%s failed\n",
 				crypter_dir);
-	else if (dest_encrypt)
-		printk(KERN_WARNING "Decrypting file moved out of /%s failed",
+	else if (src_encrypt)
+		printk(KERN_WARNING "Decrypting file moved out of /%s failed\n",
 				crypter_dir);
+	else
+		printk(KERN_WARNING "Tried, failed to encrypt inapplicable file\n");
 	kfree(buf);
-	return -EIO;
+	return 0;
 }
 
 const struct inode_operations ext2_dir_inode_operations = {
