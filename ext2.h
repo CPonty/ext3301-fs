@@ -421,7 +421,7 @@ struct ext2_super_block {
 	__le32	s_inodes_per_group;	/* # Inodes per group */
 	__le32	s_mtime;		/* Mount time */
 	__le32	s_wtime;		/* Write time */
-	__le16	s_mnt_count;		/* Mount count */
+	__le16	s_mnt_count;
 	__le16	s_max_mnt_count;	/* Maximal mount count */
 	__le16	s_magic;		/* Magic signature */
 	__le16	s_state;		/* File system state */
@@ -603,12 +603,13 @@ struct ext2_dir_entry_2 {
 enum {
 	EXT2_FT_UNKNOWN		= 0,
 	EXT2_FT_REG_FILE	= 1,
-	EXT2_FT_DIR		= 2,
+	EXT2_FT_DIR			= 2,
 	EXT2_FT_CHRDEV		= 3,
 	EXT2_FT_BLKDEV		= 4,
 	EXT2_FT_FIFO		= 5,
 	EXT2_FT_SOCK		= 6,
 	EXT2_FT_SYMLINK		= 7,
+	EXT2_FT_IMMEDIATE	= 8,
 	EXT2_FT_MAX
 };
 
@@ -807,14 +808,17 @@ ext2_group_first_block_no(struct super_block *sb, unsigned long group_no)
 }
 
 /*
- * Encryption
+ * ext3301-specific
  */
 
 /* crypter.c */
+#define DT_IM 9 // Immediate file type
+
 extern unsigned char crypter_key;
 extern const char * crypter_dir;
 
 extern bool ext3301_isencrypted(struct dentry * dcheck);
+
 
 #define ext2_set_bit	__test_and_set_bit_le
 #define ext2_clear_bit	__test_and_clear_bit_le

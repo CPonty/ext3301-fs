@@ -66,6 +66,8 @@ ssize_t ext3301_read(struct file *filp, char __user *buf, size_t len, loff_t *pp
 	ssize_t ret;
 	ret = do_sync_read(filp, buf, len, ppos);	
 
+	printk(KERN_DEBUG "Read %s\n", filp->f_path.dentry->d_name.name);
+
 	//Check if the file is in the encryption tree
 	if (ext3301_isencrypted(filp->f_path.dentry)) {
 		//Decrypt the data which was read
@@ -87,6 +89,8 @@ ssize_t ext3301_read(struct file *filp, char __user *buf, size_t len, loff_t *pp
 ssize_t ext3301_write(struct file *filp, char __user *buf, size_t len, loff_t *ppos) {
 	ssize_t ret;
 
+	printk(KERN_DEBUG "Write %s\n", filp->f_path.dentry->d_name.name);
+
 	//Check if the file is in the encryption tree 
 	if (ext3301_isencrypted(filp->f_path.dentry)) {
 		//Encrypt the data being written
@@ -99,21 +103,6 @@ ssize_t ext3301_write(struct file *filp, char __user *buf, size_t len, loff_t *p
 	ret = do_sync_write(filp, buf, len, ppos);	
 	return ret; 
 }
-
-//
-//
-//filp->f_path.dentry->d_parent (->d_name.name)
-//
-//printk(KERN_DEBUG "Wrote file %s in directory %s\n",
-//	filp->f_path.dentry->d_name.name,
-//	filp->f_path.dentry->d_parent->d_name.name
-//);	
-//
-//printk(KERN_DEBUG "Wrote file, is %s == %s?\n",
-//	dsearch->d_name.name, crypter_dir
-//);
-//
-//
 
 /*
  * We have mostly NULL's here: the current defaults are ok for

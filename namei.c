@@ -307,6 +307,7 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 	struct page * old_page;
 	struct ext2_dir_entry_2 * old_de;
 	int err = -ENOENT;
+	bool is_encryptable, src_encrypt, dest_encrypt;
 
 	dquot_initialize(old_dir);
 	dquot_initialize(new_dir);
@@ -321,6 +322,28 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 		if (!dir_de)
 			goto out_old;
 	}
+
+	printk(KERN_DEBUG "rename called\n");
+
+	// ext3301: check if the source XOR destination lie under /encrypt,
+	// 			and that both entries are regular or immediate files
+	is_encryptable = (old_inode->i_mode >> 12) & (DT_IM | DT_REG);
+	src_encrypt = ext3301_isencrypted(old_dentry);
+	dest_encrypt = ext3301_isencrypted(new_dentry);
+
+	if (is_encryptable)
+		printk(KERN_DEBUG "File is encryptable type (regular/immediate)\n");
+	if (src_encrypt && dest_encrypt) {
+		printk(KERN_DEBUG "File is moving inside /encrypt (no change))\n");
+	} else if (src_encrypt) {
+		printk(KERN_DEBUG "File is moving out of /encrypt. Decrypting...\n");
+	} else if (dest_encrypt) {
+		printk(KERN_DEBUG "File is moving into /encrypt. Encrypting...\n");
+	} else {
+		printk(KERN_DEBUG "Src/dest directories not encryptable.\n");
+	}
+	//
+	//
 
 	if (new_inode) {
 		struct page *new_page;

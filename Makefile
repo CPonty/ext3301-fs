@@ -5,7 +5,7 @@
 obj-m += ext3301.o
 
 ext3301-y := balloc.o dir.o file.o ialloc.o inode.o \
-	  ioctl.o namei.o super.o symlink.o
+	  ioctl.o namei.o super.o symlink.o ext3301util.o
 
 MOD_DIR=/local/comp3301/linux-3.9.4
 

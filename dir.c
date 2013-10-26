@@ -264,6 +264,7 @@ static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {
 	[EXT2_FT_FIFO]		= DT_FIFO,
 	[EXT2_FT_SOCK]		= DT_SOCK,
 	[EXT2_FT_SYMLINK]	= DT_LNK,
+	[EXT2_FT_IMMEDIATE]	= DT_IM,
 };
 
 #define S_SHIFT 12
