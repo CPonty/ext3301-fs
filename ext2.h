@@ -810,9 +810,11 @@ ext2_group_first_block_no(struct super_block *sb, unsigned long group_no)
  * Encryption
  */
 
-/* super.c */
+/* crypter.c */
 extern unsigned char crypter_key;
 extern const char * crypter_dir;
+
+extern bool ext3301_isencrypted(struct dentry * dcheck);
 
 #define ext2_set_bit	__test_and_set_bit_le
 #define ext2_clear_bit	__test_and_clear_bit_le

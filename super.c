@@ -37,10 +37,6 @@
 #include "acl.h"
 #include "xip.h"
 
-unsigned char crypter_key = 0;
-const char * crypter_dir = "encrypt";
-
-
 static void ext2_sync_super(struct super_block *sb,
 			    struct ext2_super_block *es, int wait);
 static int ext2_remount (struct super_block * sb, int * flags, char * data);
