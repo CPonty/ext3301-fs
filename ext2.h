@@ -818,6 +818,7 @@ extern unsigned char crypter_key;
 extern const char * crypter_dir;
 
 extern bool ext3301_isencrypted(struct dentry * dcheck);
+char * ext3301_getpath(struct dentry * dcheck, char * buf, int buflen);
 
 
 #define ext2_set_bit	__test_and_set_bit_le

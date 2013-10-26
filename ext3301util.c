@@ -10,6 +10,8 @@
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
 #include <linux/kernel.h>
+#include <linux/dcache.h>
+#include <linux/string.h>
 #include "ext2.h"
 #include "xattr.h"
 #include "acl.h"
@@ -34,11 +36,16 @@ bool ext3301_isencrypted(struct dentry * dcheck) {
 
 /*
  * ext3301: build a string path to the directory entry given. 
- * 	Store in buf, limited to bufsize-1 characters.
- *	Returns 0 if successful, >0 if the string is too large for the buffer.
+ * 	Writes the string into the buffer supplied.
+ * 	The string is built from the end of the buffer backwards.
+ *	Returns a pointer to the start of the string on success, Null on failure.
  */
-int ext3301_getpath(struct dentry * dcheck, char * buf, size_t bufsize) {
-	return 0;	
+char * ext3301_getpath(struct dentry * dcheck, char * buf, int buflen) {
+	char * s = dentry_path_raw(dcheck, buf, buflen);
+	if (s==ERR_PTR(-ENAMETOOLONG))
+		return NULL;
+	else
+		return s;
 }
 
 //
