@@ -57,6 +57,20 @@ int ext2_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	return ret;
 }
 
+/*
+ * ext3301 utility: check if file is in the encryption tree 
+ */
+bool ext3301_isencrypted(struct file *filp) {
+	struct dentry * dsearch;
+	struct dentry * dtop;
+
+	dtop = filp->f_path.dentry;
+	do {
+		dsearch = dtop;
+		dtop = dtop->d_parent;
+	} while (dtop != dtop->d_parent);
+	return !(strcmp(crypter_dir, dsearch->d_name.name));
+}
 
 /* 
  * ext3301 variant of the standard file read function.
@@ -67,8 +81,14 @@ ssize_t ext3301_read(struct file *filp, char __user *buf, size_t len, loff_t *pp
 	ssize_t ret;
 	ret = do_sync_read(filp, buf, len, ppos);	
 
-	//Check if the parent directory is marked for encryption
-	
+	//Check if the file is in the encryption tree
+	if (ext3301_isencrypted(filp)) {
+		//Decrypt the data which was read
+		//
+		//
+		printk(KERN_DEBUG "Reading from encrypted file %s\n",
+			filp->f_path.dentry->d_name.name);
+	}
 
 	return ret; 
 }
@@ -95,17 +115,9 @@ ssize_t ext3301_read(struct file *filp, char __user *buf, size_t len, loff_t *pp
  */
 ssize_t ext3301_write(struct file *filp, char __user *buf, size_t len, loff_t *ppos) {
 	ssize_t ret;
-	struct dentry * dsearch;
-	struct dentry * dtop;
-	ret = do_sync_write(filp, buf, len, ppos);	
 
-	//Check if the parent directory is marked for encryption
-	dtop = filp->f_path.dentry;
-	do {
-		dsearch = dtop;
-		dtop = dtop->d_parent;
-	} while (dtop != dtop->d_parent);
-	if (strcmp(crypter_dir, dsearch->d_name.name)==0) {
+	//Check if the file is in the encryption tree 
+	if (ext3301_isencrypted(filp)) {
 		//Encrypt the data being written
 		//
 		//
@@ -113,6 +125,7 @@ ssize_t ext3301_write(struct file *filp, char __user *buf, size_t len, loff_t *p
 			filp->f_path.dentry->d_name.name);
 	}
 
+	ret = do_sync_write(filp, buf, len, ppos);	
 	return ret; 
 }
 
