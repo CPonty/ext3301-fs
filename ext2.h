@@ -828,7 +828,13 @@ extern void kfile_close(struct file * f);
 
 #define DT_IM 9 // Immediate file type
 #define EXT3301_CHUNK EXT2_MIN_BLOCK_SIZE
+#define DEBUG 1 // Global debug flag; switch extended dmesg logging
 
+#if DEBUG>0
+#define printd(...) printk(__VA_ARGS__);
+#else
+#define printd(...) do{}while(0);
+#endif
 #define FILP_NAME(f) 	(f->f_path.dentry->d_name.name)
 #define FILP_PARENT(f) 	(f->f_path.dentry->d_parent->d_name.name)
 #define FILP_FSIZE(f) 	(f->f_path.dentry->d_inode->i_size)

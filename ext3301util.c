@@ -94,8 +94,8 @@ struct file * kfile_open(const char * fpath, int flags) {
 		return NULL;
 	if (fpath[0]=='/')
 		offset++;
-		//printk(KERN_DEBUG"Offsetting root-relative file open\n");
-		//printk(KERN_DEBUG"fpath: %s\n", (const char *)(fpath+offset));
+		//printd(KERN_DEBUG"Offsetting root-relative file open\n");
+		//printd(KERN_DEBUG"fpath: %s\n", (const char *)(fpath+offset));
 
 	fs = get_fs();
 	set_fs(get_ds());
@@ -159,12 +159,7 @@ void kfile_close(struct file * f) {
 }
 
 //
-//
 //filp->f_path.dentry->d_parent (->d_name.name)
-//
-//printk(KERN_DEBUG "Wrote file %s in directory %s\n",
 //	filp->f_path.dentry->d_name.name,
 //	filp->f_path.dentry->d_parent->d_name.name
-//);	
-//
 //
