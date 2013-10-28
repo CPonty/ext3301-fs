@@ -20,6 +20,29 @@ unsigned char crypter_key = 0;
 const char * crypter_dir = "encrypt";
 
 /*
+ * ext3301 cryptbuf: apply the encryption XOR byte cipher to a buffer in
+ *  user space. Return 0 on success, >0  on failure.
+ */
+bool ext3301_cryptbuf(char __user * buf, size_t len) {
+	char * kbuf;
+	size_t i;
+	if (!(kbuf = kmalloc(len, GFP_KERNEL)))
+		return 1;
+	if (copy_from_user((void *)kbuf, (const void *)buf, (unsigned long)len)) {
+		kfree(kbuf);
+		return 2;
+	}
+	for (i=0; i<len; i++)
+		kbuf[i] += 1;
+	if (copy_to_user((void *)buf, (const void *)kbuf, (unsigned long)len)) {
+		kfree(kbuf);
+		return 3;
+	}
+	kfree(kbuf);
+	return 0;
+}
+
+/*
  * ext3301 isencrypted: check if directory entry is in the encryption tree.
  * To get the dentry of a file:
  * 	(struct file *)filp->f_path.dentry

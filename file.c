@@ -62,18 +62,18 @@ int ext2_fsync(struct file *file, loff_t start, loff_t end, int datasync)
  *  modifications: handling encryption and immediate files.
  *  original: do_sync_read
  */
-ssize_t ext3301_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos) {
+ssize_t ext3301_read(struct file * filp, char __user * buf, size_t len, 
+		loff_t * ppos) {
 	ssize_t ret;
 	ret = do_sync_read(filp, buf, len, ppos);	
 
-	printk(KERN_DEBUG "Read %s\n", FILP_NAME(filp));
+	printk(KERN_WARNING "Read: '%s'\n", FILP_NAME(filp));
 
 	//Check if the file is in the encryption tree
 	if (ext3301_isencrypted(filp->f_path.dentry)) {
 		//Decrypt the data which was read
-		//
-		//
-		printk(KERN_DEBUG "Reading from encrypted file\n");
+		printk(KERN_WARNING "Reading encrypted file (%d bytes)\n", (int)len);
+		ext3301_cryptbuf(buf, len);
 	}
 
 	return ret; 
@@ -85,17 +85,17 @@ ssize_t ext3301_read(struct file *filp, char __user *buf, size_t len, loff_t *pp
  *  modifications: handling encryption and immediate files.
  *  original: do_sync_write
  */
-ssize_t ext3301_write(struct file *filp, char __user *buf, size_t len, loff_t *ppos) {
+ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len, 
+		loff_t * ppos) {
 	ssize_t ret;
 
-	printk(KERN_DEBUG "Write %s\n", FILP_NAME(filp));
+	printk(KERN_WARNING "Write: '%s'\n", FILP_NAME(filp));
 
 	//Check if the file is in the encryption tree 
 	if (ext3301_isencrypted(filp->f_path.dentry)) {
 		//Encrypt the data being written
-		//
-		//
-		printk(KERN_DEBUG "Writing to encrypted file\n");
+		printk(KERN_WARNING "Writing encrypted file (%d bytes)\n", (int)len);
+		ext3301_cryptbuf(buf, len);
 	}
 
 	ret = do_sync_write(filp, buf, len, ppos);	

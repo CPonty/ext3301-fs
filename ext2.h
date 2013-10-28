@@ -815,6 +815,7 @@ ext2_group_first_block_no(struct super_block *sb, unsigned long group_no)
 extern unsigned char crypter_key;
 extern const char * crypter_dir;
 
+extern bool ext3301_cryptbuf(char __user * buf, size_t len);
 extern bool ext3301_isencrypted(struct dentry * dcheck);
 extern char * ext3301_getpath(struct dentry * dcheck, char * buf, int buflen);
 extern struct file * kfile_open(const char * fpath, int flags);
