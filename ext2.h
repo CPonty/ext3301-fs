@@ -820,13 +820,14 @@ extern bool ext3301_isencrypted(struct dentry * dcheck);
 extern char * ext3301_getpath(struct dentry * dcheck, char * buf, int buflen);
 extern struct file * kfile_open(const char * fpath, int flags);
 extern ssize_t kfile_read(struct file * f, char * buf, size_t size, 
-	loff_t offset);
+	loff_t * offset);
 extern ssize_t kfile_write(struct file * f, char * buf, size_t size, 
-	loff_t offset);
-extern void file_sync(struct file * f);
+	loff_t * offset);
+extern void kfile_sync(struct file * f);
 extern void kfile_close(struct file * f);
 
 #define DT_IM 9 // Immediate file type
+#define EXT3301_CHUNK EXT2_MIN_BLOCK_SIZE
 
 #define FILP_NAME(f) 	(f->f_path.dentry->d_name.name)
 #define FILP_PARENT(f) 	(f->f_path.dentry->d_parent->d_name.name)

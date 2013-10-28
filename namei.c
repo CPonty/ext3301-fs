@@ -307,9 +307,13 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 	struct page * old_page;
 	struct ext2_dir_entry_2 * old_de;
 	int err = -ENOENT;
+	//
 	bool is_encryptable, src_encrypt, dest_encrypt;
 	struct file * fcrypt;
-	int fsize;
+	ssize_t nchunk, nread, nwritten;
+	loff_t fpos, fseekpos;
+	int i;
+	unsigned int fsize, fremaining;
 	char * buf, * strbuf1, * strbuf2;
 	char * path_src, * path_dest;
 
@@ -356,12 +360,12 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 	// 			and both entries are regular or immediate files
 	strbuf1 = kmalloc((size_t)512, GFP_KERNEL);
 	strbuf2 = kmalloc((size_t)512, GFP_KERNEL);
-	buf = kmalloc((size_t)EXT2_MIN_BLOCK_SIZE, GFP_KERNEL);
+	buf = kmalloc((size_t)EXT3301_CHUNK, GFP_KERNEL);
 	is_encryptable = (old_inode->i_mode >> 12) & (DT_IM | DT_REG);
 	src_encrypt = ext3301_isencrypted(old_dentry);
 	dest_encrypt = ext3301_isencrypted(new_dentry);
-	path_src  = ext3301_getpath(old_dentry, strbuf1, EXT2_MIN_BLOCK_SIZE);
-	path_dest = ext3301_getpath(new_dentry, strbuf2, EXT2_MIN_BLOCK_SIZE);
+	path_src  = ext3301_getpath(old_dentry, strbuf1, EXT3301_CHUNK);
+	path_dest = ext3301_getpath(new_dentry, strbuf2, EXT3301_CHUNK);
 
 	// ext3301: kernel logging
 	printk(KERN_DEBUG "rename (%s --> %s)\n", path_src, path_dest);
@@ -388,20 +392,66 @@ cryptstart:
 	//printk(KERN_DEBUG "<crypt>\n");
 	if (!path_src)
 		goto cryptfail;
-	////fcrypt = filp_open("/mnt/ext3301-fs/1", O_RDONLY, 0);
-	////fcrypt = kfile_open("/3", O_RDONLY);
-	fcrypt = kfile_open(path_src, O_RDONLY);
+	fcrypt = kfile_open(path_src, O_RDWR);
 	if (!fcrypt)
 		goto cryptfail;
 	fsize = FILP_FSIZE(fcrypt);
+	fremaining = fsize;
+	fpos = 0;
+	fseekpos = 0;
 	printk(KERN_DEBUG " - Opened %s (Fsize: %d)\n", 
 		FILP_NAME(fcrypt), fsize);
+	if (!fsize) 
+		goto cryptclose;
+	while (fremaining > 0) {
+		// choose a chunk size
+		nchunk = (fremaining > (size_t)EXT3301_CHUNK 
+			? (ssize_t)EXT3301_CHUNK
+			: (ssize_t)fremaining
+		);
+		printk(KERN_DEBUG " - Starting a chunk at pos %u.\n", 
+			(unsigned int)fpos);
+		printk(KERN_DEBUG " - Decided on a %d byte chunk\n", (int)nchunk);
+		// read a chunk
+		fpos = fseekpos;
+		nread = kfile_read(fcrypt, buf, (size_t)nchunk, &fpos);
+		printk(KERN_DEBUG " - Read block, got ssize_t %d\n", (int)nread);
+		printk(KERN_DEBUG " - Fpos is now %u.\n", (unsigned int)fpos);
+		// check we read a good number of bytes
+		//	this inequality covers error conditions (nread<0) and 
+		//	partial reads (0<=nread<=nchunk && nread != nchunk)
+		if (nread != nchunk) {
+			kfile_close(fcrypt);
+			goto cryptfail;
+		}
+		// encrypt the buffer
+		for (i=0; i<nchunk; i++)
+			buf[i] ^= crypter_key;
+		// write the chunk back
+		fpos = fseekpos;
+		printk(KERN_DEBUG " - Corrected Fpos to %u.\n", (unsigned int)fpos);
+		nwritten = kfile_write(fcrypt, buf, (size_t)nchunk, &fpos);
+		printk(KERN_DEBUG " - Wrote block, got ssize_t %d\n", (int)nwritten);
+		// check we wrote back successfully
+		if (nwritten != nchunk) {
+			kfile_close(fcrypt);
+			goto cryptfail;
+		}
+		// move the file marker forward, decrease the nbytes remaining
+		fseekpos += nchunk;
+		fremaining -= nchunk;
+	}
+	// sync the read/write operations. Very important!
+	kfile_sync(fcrypt);
+
+	//printk(KERN_DEBUG " - Tried to read block, got ssize_t %d\n", (int)nread);
+cryptclose:
 	kfile_close(fcrypt);
 	////filp_close(fcrypt, 0);
 	// CRYPT/DECRYPT
 	//	1. Open file as read/write
 	//	2. Loop:
-	//		read EXT2_MIN_BLOCK_SIZE into userspace buffer
+	//		read EXT3301_CHUNK into userspace buffer
 	//		xor
 	//		write buffer to file
 	//		move pointer forwards

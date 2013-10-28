@@ -26,6 +26,8 @@ const char * crypter_dir = "encrypt";
 bool ext3301_cryptbuf(char __user * buf, size_t len) {
 	char * kbuf;
 	size_t i;
+	if (!len)
+		return 0;
 	if (!(kbuf = kmalloc(len, GFP_KERNEL)))
 		return 1;
 	if (copy_from_user((void *)kbuf, (const void *)buf, (unsigned long)len)) {
@@ -113,13 +115,14 @@ struct file * kfile_open(const char * fpath, int flags) {
  *	 the number of bytes read up to *size*. It is possible for the read to
  *	 return fewer bytes than requested.
  */
-ssize_t kfile_read(struct file * f, char * buf, size_t size, loff_t offset) {
+ssize_t kfile_read(struct file * f, char * buf, size_t size, 
+		loff_t * offset) {
 	ssize_t ret;
 	mm_segment_t fs;
 
 	fs = get_fs();
 	set_fs(get_ds());
-	ret = vfs_read(f, buf, size, &offset);
+	ret = vfs_read(f, buf, size, offset);
 	set_fs(fs);
 
 	return ret;
@@ -128,13 +131,14 @@ ssize_t kfile_read(struct file * f, char * buf, size_t size, loff_t offset) {
 /*
  * kernel file write: run vfs_write() in the kernel address space.
  */
-ssize_t kfile_write(struct file * f, char * buf, size_t size, loff_t offset) {
+ssize_t kfile_write(struct file * f, char * buf, size_t size, 
+		loff_t * offset) {
 	ssize_t ret;
 	mm_segment_t fs;
 
 	fs = get_fs();
 	set_fs(get_ds());
-	ret = vfs_write(f, buf, size, &offset);
+	ret = vfs_write(f, buf, size, offset);
 	set_fs(fs);
 
 	return ret;
@@ -143,7 +147,7 @@ ssize_t kfile_write(struct file * f, char * buf, size_t size, loff_t offset) {
 /*
  * kernel file sync: run vfs_fsync()
  */
-void file_sync(struct file * f) {
+void kfile_sync(struct file * f) {
 	vfs_fsync(f, 0);
 }
 
