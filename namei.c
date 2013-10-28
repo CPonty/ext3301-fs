@@ -310,6 +310,7 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 	bool is_encryptable, src_encrypt, dest_encrypt;
 	struct file * fcrypt;
 	int fsize;
+	char strbuf[512];
 	char * buf;
 	char * path;
 
@@ -356,11 +357,10 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 	// ext3301: check if the source XOR destination lie under /encrypt,
 	// 			and that both entries are regular or immediate files
 
-	buf = kmalloc((size_t)EXT2_MIN_BLOCK_SIZE, GFP_KERNEL);
 	is_encryptable = (old_inode->i_mode >> 12) & (DT_IM | DT_REG);
 	src_encrypt = ext3301_isencrypted(old_dentry);
 	dest_encrypt = ext3301_isencrypted(new_dentry);
-	path = ext3301_getpath(new_dentry, buf, EXT2_MIN_BLOCK_SIZE);
+	path = ext3301_getpath(new_dentry, strbuf, EXT2_MIN_BLOCK_SIZE);
 
 
 	/*
@@ -383,8 +383,7 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 	}
 
 	// ext3301: encryption decision
-	printk(KERN_DEBUG "rename called\n");
-	printk(KERN_DEBUG "Full dest path: '%s'\n", path);
+	printk(KERN_DEBUG "rename (Dest path: %s)\n", path);
 
 	if (is_encryptable) {
 		printk(KERN_DEBUG "File is encryptable type (regular/immediate)\n");
@@ -405,21 +404,26 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 
 	//
 	//
-	kfree(buf);
 	return 0;
 
 out_crypt:
 	// ext3301: encrypt/decrypt file	
-	if (!path)
-		goto out_cryptfail;
-	fcrypt = filp_open("/mnt/ext3301-fs/1", O_RDONLY, 0);
-	//fcrypt = filp_open("/1", O_RDONLY, 0);
-	if (IS_ERR(fcrypt))
-		goto out_cryptfail;
-	fsize = fcrypt->f_path.dentry->d_inode->i_size;
-	printk(KERN_DEBUG "We opened %s\n", fcrypt->f_path.dentry->d_name.name);
-	printk(KERN_DEBUG "Fsize: %d bytes\n", fsize);
-	filp_close(fcrypt, 0);
+	buf = kmalloc((size_t)EXT2_MIN_BLOCK_SIZE, GFP_KERNEL);
+	////sprintf(strbuf, "/encrypt/3");
+	////path = strbuf+1;
+	//if (!path)
+	//	goto out_cryptfail;
+	////strcpy(strbuf, path);
+	////fcrypt = filp_open("/mnt/ext3301-fs/1", O_RDONLY, 0);
+	////fcrypt = filp_open("1", O_RDONLY, 0);
+	////fcrypt = kfile_open("/3", O_RDONLY);
+	//fcrypt = kfile_open(strbuf, O_RDONLY);
+	//if (IS_ERR(fcrypt))
+	//	goto out_cryptfail;
+	//fsize = FILP_FSIZE(fcrypt);
+	//printk(KERN_WARNING "We opened %s (Fsize: %d)\n", FILP_NAME(fcrypt), fsize);
+	//kfile_close(fcrypt);
+	////filp_close(fcrypt, 0);
 	// CRYPT/DECRYPT
 	//	1. Open file as read/write
 	//	2. Loop:
@@ -445,10 +449,10 @@ out_cryptfail:
 		printk(KERN_WARNING "Encrypting file moved to /%s failed\n",
 				crypter_dir);
 	else if (src_encrypt)
-		printk(KERN_WARNING "Decrypting file moved out of /%s failed\n",
+		printk(KERN_WARNING "Decrypting file moved from /%s failed\n",
 				crypter_dir);
 	else
-		printk(KERN_WARNING "Tried, failed to encrypt inapplicable file\n");
+		printk(KERN_WARNING "You shouldn't be getting cryptfail!\n");
 	kfree(buf);
 	return 0;
 }

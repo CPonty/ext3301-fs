@@ -20,7 +20,7 @@ unsigned char crypter_key = 0;
 const char * crypter_dir = "encrypt";
 
 /*
- * ext3301: check if directory entry is in the encryption tree.
+ * ext3301 isencrypted: check if directory entry is in the encryption tree.
  * To get the dentry of a file:
  * 	(struct file *)filp->f_path.dentry
  */
@@ -35,7 +35,7 @@ bool ext3301_isencrypted(struct dentry * dcheck) {
 }
 
 /*
- * ext3301: build a string path to the directory entry given. 
+ * ext3301 getpath: build a string path to the directory entry given. 
  * 	Writes the string into the buffer supplied.
  * 	The string is built from the end of the buffer backwards.
  *	Returns a pointer to the start of the string on success, Null on failure.
@@ -48,6 +48,90 @@ char * ext3301_getpath(struct dentry * dcheck, char * buf, int buflen) {
 		return s;
 }
 
+
+/*-----------------------------------------------------------*/
+
+/*
+ * kernel file open: run filp_open() in the kernel address space.
+ *  Returns a file struct pointer on success, Null on failure.
+ *  During the open, the address limit of the process is set to that of the
+ *   kernel (and then reverted).
+ *	Additionally, if the first character in the path is the root slash ('/'),
+ *	 it is stripped. This allows the file opening utility to search the set of
+ *	 mounted file systems to open from.
+ */
+struct file * kfile_open(const char * fpath, int flags) {
+	struct file * f = NULL;
+	int offset = 0;
+	mm_segment_t fs;
+
+	if (fpath==NULL)
+		return NULL;
+	if (fpath[0]=='/') {
+		offset++;
+		printk(KERN_WARNING "Offsetting root-relative file open\n");
+		printk(KERN_WARNING "fpath: %s\n", (const char *)(fpath+offset));
+	}
+
+	fs = get_fs();
+	set_fs(get_ds());
+	f = filp_open(fpath+offset, flags, 0);
+	set_fs(fs);
+
+	if (IS_ERR(f))
+		return NULL;
+	return f;
+}
+
+/*
+ * kernel file read: run vfs_read() in the kernel address space.
+ *	Return value is directly passed from vfs_read (which gets it from
+ *	 the fs-specific read function, in this case ext3301_read).
+ *	Negative values indicate an error condition; Positive values indicate
+ *	 the number of bytes read up to *size*. It is possible for the read to
+ *	 return fewer bytes than requested.
+ */
+ssize_t kfile_read(struct file * f, char * buf, size_t size, loff_t offset) {
+	ssize_t ret;
+	mm_segment_t fs;
+
+	fs = get_fs();
+	set_fs(get_ds());
+	ret = vfs_read(f, buf, size, &offset);
+	set_fs(fs);
+
+	return ret;
+}
+
+/*
+ * kernel file write: run vfs_write() in the kernel address space.
+ */
+ssize_t kfile_write(struct file * f, char * buf, size_t size, loff_t offset) {
+	ssize_t ret;
+	mm_segment_t fs;
+
+	fs = get_fs();
+	set_fs(get_ds());
+	ret = vfs_write(f, buf, size, &offset);
+	set_fs(fs);
+
+	return ret;
+}
+
+/*
+ * kernel file sync: run vfs_fsync()
+ */
+void file_sync(struct file * f) {
+	vfs_fsync(f, 0);
+}
+
+/*
+ * kernel file close: run filp_close().
+ */
+void kfile_close(struct file * f) {
+	filp_close(f, 0);
+}
+
 //
 //
 //filp->f_path.dentry->d_parent (->d_name.name)
@@ -56,9 +140,5 @@ char * ext3301_getpath(struct dentry * dcheck, char * buf, int buflen) {
 //	filp->f_path.dentry->d_name.name,
 //	filp->f_path.dentry->d_parent->d_name.name
 //);	
-//
-//printk(KERN_DEBUG "Wrote file, is %s == %s?\n",
-//	dsearch->d_name.name, crypter_dir
-//);
 //
 //

@@ -812,13 +812,25 @@ ext2_group_first_block_no(struct super_block *sb, unsigned long group_no)
  */
 
 /* crypter.c */
-#define DT_IM 9 // Immediate file type
-
 extern unsigned char crypter_key;
 extern const char * crypter_dir;
 
 extern bool ext3301_isencrypted(struct dentry * dcheck);
-char * ext3301_getpath(struct dentry * dcheck, char * buf, int buflen);
+extern char * ext3301_getpath(struct dentry * dcheck, char * buf, int buflen);
+extern struct file * kfile_open(const char * fpath, int flags);
+extern ssize_t kfile_read(struct file * f, char * buf, size_t size, 
+	loff_t offset);
+extern ssize_t kfile_write(struct file * f, char * buf, size_t size, 
+	loff_t offset);
+extern void file_sync(struct file * f);
+extern void kfile_close(struct file * f);
+
+#define DT_IM 9 // Immediate file type
+
+#define FILP_NAME(f) 	(f->f_path.dentry->d_name.name)
+#define FILP_PARENT(f) 	(f->f_path.dentry->d_parent->d_name.name)
+#define FILP_FSIZE(f) 	(f->f_path.dentry->d_inode->i_size)
+
 
 
 #define ext2_set_bit	__test_and_set_bit_le
