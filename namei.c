@@ -310,9 +310,8 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 	bool is_encryptable, src_encrypt, dest_encrypt;
 	struct file * fcrypt;
 	int fsize;
-	char strbuf[512];
-	char * buf;
-	char * path;
+	char * buf, * strbuf1, * strbuf2;
+	char * path_src, * path_dest;
 
 	dquot_initialize(old_dir);
 	dquot_initialize(new_dir);
@@ -353,16 +352,72 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 			inode_inc_link_count(new_dir);
 	}
 
-
 	// ext3301: check if the source XOR destination lie under /encrypt,
-	// 			and that both entries are regular or immediate files
-
+	// 			and both entries are regular or immediate files
+	strbuf1 = kmalloc((size_t)512, GFP_KERNEL);
+	strbuf2 = kmalloc((size_t)512, GFP_KERNEL);
+	buf = kmalloc((size_t)EXT2_MIN_BLOCK_SIZE, GFP_KERNEL);
 	is_encryptable = (old_inode->i_mode >> 12) & (DT_IM | DT_REG);
 	src_encrypt = ext3301_isencrypted(old_dentry);
 	dest_encrypt = ext3301_isencrypted(new_dentry);
-	path = ext3301_getpath(new_dentry, strbuf, EXT2_MIN_BLOCK_SIZE);
+	path_src  = ext3301_getpath(old_dentry, strbuf1, EXT2_MIN_BLOCK_SIZE);
+	path_dest = ext3301_getpath(new_dentry, strbuf2, EXT2_MIN_BLOCK_SIZE);
 
+	// ext3301: kernel logging
+	printk(KERN_DEBUG "rename (%s --> %s)\n", path_src, path_dest);
+	if (is_encryptable) {
+		printk(KERN_DEBUG " - File encryptable type (regular/immediate)\n");
+		if (src_encrypt && dest_encrypt) {
+			printk(KERN_DEBUG " - File moving inside /encrypt (no change))\n");
+		} else if (src_encrypt) {
+			printk(KERN_DEBUG " - File moving out of /encrypt. Decrypting..\n");
+			goto cryptstart;
+		} else if (dest_encrypt) {
+			printk(KERN_DEBUG " - File moving into /encrypt. Encrypting..\n");
+			goto cryptstart;
+		} else {
+			printk(KERN_DEBUG " - Src/dest directories not encryptable\n");
+		}
+	} else {
+		printk(KERN_DEBUG " - File not an encryptable type\n");
+	}
+	goto cryptdone;
 
+cryptstart:
+	// ext3301: encrypt/decrypt file	
+	//printk(KERN_DEBUG "<crypt>\n");
+	if (!path_src)
+		goto cryptfail;
+	////fcrypt = filp_open("/mnt/ext3301-fs/1", O_RDONLY, 0);
+	////fcrypt = kfile_open("/3", O_RDONLY);
+	fcrypt = kfile_open(path_src, O_RDONLY);
+	if (!fcrypt)
+		goto cryptfail;
+	fsize = FILP_FSIZE(fcrypt);
+	printk(KERN_DEBUG " - Opened %s (Fsize: %d)\n", 
+		FILP_NAME(fcrypt), fsize);
+	kfile_close(fcrypt);
+	////filp_close(fcrypt, 0);
+	// CRYPT/DECRYPT
+	//	1. Open file as read/write
+	//	2. Loop:
+	//		read EXT2_MIN_BLOCK_SIZE into userspace buffer
+	//		xor
+	//		write buffer to file
+	//		move pointer forwards
+	goto cryptdone;
+
+cryptfail:
+	// ext3301: encrypt/decrypt failed
+	if (dest_encrypt)
+		printk(KERN_WARNING "Encrypting file moved to /%s failed\n",
+				crypter_dir);
+	else if (src_encrypt)
+		printk(KERN_WARNING "Decrypting file moved from /%s failed\n",
+				crypter_dir);
+	goto cryptdone;
+
+cryptdone:
 	/*
 	 * Like most other Unix systems, set the ctime for inodes on a
  	 * rename.
@@ -381,58 +436,8 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 		}
 		inode_dec_link_count(old_dir);
 	}
+	goto out_free;
 
-	// ext3301: encryption decision
-	printk(KERN_DEBUG "rename (Dest path: %s)\n", path);
-
-	if (is_encryptable) {
-		printk(KERN_DEBUG "File is encryptable type (regular/immediate)\n");
-
-		if (src_encrypt && dest_encrypt) {
-			printk(KERN_DEBUG "File is moving inside /encrypt (no change))\n");
-		} else if (src_encrypt) {
-			printk(KERN_DEBUG "File is moving out of /encrypt. Decrypting..\n");
-			goto out_crypt;
-		} else if (dest_encrypt) {
-			printk(KERN_DEBUG "File is moving into /encrypt. Encrypting..\n");
-			goto out_crypt;
-		} else {
-			printk(KERN_DEBUG "Src/dest directories not encryptable.\n");
-		}
-	} else
-		printk(KERN_DEBUG "File is not an encryptable type\n");
-
-	//
-	//
-	return 0;
-
-out_crypt:
-	// ext3301: encrypt/decrypt file	
-	buf = kmalloc((size_t)EXT2_MIN_BLOCK_SIZE, GFP_KERNEL);
-	////sprintf(strbuf, "/encrypt/3");
-	////path = strbuf+1;
-	//if (!path)
-	//	goto out_cryptfail;
-	////strcpy(strbuf, path);
-	////fcrypt = filp_open("/mnt/ext3301-fs/1", O_RDONLY, 0);
-	////fcrypt = filp_open("1", O_RDONLY, 0);
-	////fcrypt = kfile_open("/3", O_RDONLY);
-	//fcrypt = kfile_open(strbuf, O_RDONLY);
-	//if (IS_ERR(fcrypt))
-	//	goto out_cryptfail;
-	//fsize = FILP_FSIZE(fcrypt);
-	//printk(KERN_WARNING "We opened %s (Fsize: %d)\n", FILP_NAME(fcrypt), fsize);
-	//kfile_close(fcrypt);
-	////filp_close(fcrypt, 0);
-	// CRYPT/DECRYPT
-	//	1. Open file as read/write
-	//	2. Loop:
-	//		read EXT2_MIN_BLOCK_SIZE into userspace buffer
-	//		xor
-	//		write buffer to file
-	//		move pointer forwards
-	kfree(buf);
-	return 0;
 out_dir:
 	if (dir_de) {
 		kunmap(dir_page);
@@ -443,16 +448,10 @@ out_old:
 	page_cache_release(old_page);
 out:
 	return err;
-out_cryptfail:
-	// ext3301: encrypt/decrypt failed
-	if (dest_encrypt)
-		printk(KERN_WARNING "Encrypting file moved to /%s failed\n",
-				crypter_dir);
-	else if (src_encrypt)
-		printk(KERN_WARNING "Decrypting file moved from /%s failed\n",
-				crypter_dir);
-	else
-		printk(KERN_WARNING "You shouldn't be getting cryptfail!\n");
+out_free:
+	// ext3301: free buffers
+	kfree(strbuf1);
+	kfree(strbuf2);
 	kfree(buf);
 	return 0;
 }
