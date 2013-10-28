@@ -67,12 +67,12 @@ ssize_t ext3301_read(struct file * filp, char __user * buf, size_t len,
 	ssize_t ret;
 	ret = do_sync_read(filp, buf, len, ppos);	
 
-	printk(KERN_WARNING "Read: '%s'\n", FILP_NAME(filp));
+	printk(KERN_DEBUG "Read: '%s'\n", FILP_NAME(filp));
 
 	//Check if the file is in the encryption tree
 	if (ext3301_isencrypted(filp->f_path.dentry)) {
 		//Decrypt the data which was read
-		printk(KERN_WARNING "Reading encrypted file (%d bytes)\n", (int)len);
+		printk(KERN_DEBUG "Reading encrypted file (%d bytes)\n", (int)len);
 		ext3301_cryptbuf(buf, len);
 	}
 
@@ -89,12 +89,12 @@ ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len,
 		loff_t * ppos) {
 	ssize_t ret;
 
-	printk(KERN_WARNING "Write: '%s'\n", FILP_NAME(filp));
+	printk(KERN_DEBUG "Write: '%s'\n", FILP_NAME(filp));
 
 	//Check if the file is in the encryption tree 
 	if (ext3301_isencrypted(filp->f_path.dentry)) {
 		//Encrypt the data being written
-		printk(KERN_WARNING "Writing encrypted file (%d bytes)\n", (int)len);
+		printk(KERN_DEBUG "Writing encrypted file (%d bytes)\n", (int)len);
 		ext3301_cryptbuf(buf, len);
 	}
 

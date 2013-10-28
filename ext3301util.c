@@ -33,7 +33,7 @@ bool ext3301_cryptbuf(char __user * buf, size_t len) {
 		return 2;
 	}
 	for (i=0; i<len; i++)
-		kbuf[i] += 1;
+		kbuf[i] ^= crypter_key;
 	if (copy_to_user((void *)buf, (const void *)kbuf, (unsigned long)len)) {
 		kfree(kbuf);
 		return 3;
