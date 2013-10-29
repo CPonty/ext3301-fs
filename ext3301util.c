@@ -94,8 +94,6 @@ struct file * kfile_open(const char * fpath, int flags) {
 		return NULL;
 	if (fpath[0]=='/')
 		offset++;
-		//printd(KERN_DEBUG"Offsetting root-relative file open\n");
-		//printd(KERN_DEBUG"fpath: %s\n", (const char *)(fpath+offset));
 
 	fs = get_fs();
 	set_fs(get_ds());

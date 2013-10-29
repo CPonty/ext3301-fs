@@ -828,13 +828,36 @@ extern void kfile_close(struct file * f);
 
 #define DT_IM 9 // Immediate file type
 #define EXT3301_CHUNK EXT2_MIN_BLOCK_SIZE
-#define DEBUG 1 // Global debug flag; switch extended dmesg logging
 
-#if DEBUG>0
-#define printd(...) printk(__VA_ARGS__);
-#else
-#define printd(...) do{}while(0);
+/*
+ * Debug flag; selectively enable logging ext3301-specific messages.
+ *	0	No logging
+ *	1	Minimal logs
+ *	2	Immediate files 
+ *	3	Encryption 
+ *	4	All
+ */
+#define DEBUG 0
+
+/*
+ * Debug print functions (arguments map directly to printk).
+ * 	dbg_im	Immediate files message
+ * 	dbg_cr	Encryption message
+ * 	dbg		Both
+ */
+#define dbg(...) 	do{}while(0)
+#define dbg_im(...) do{}while(0)
+#define dbg_cr(...) do{}while(0)
+#if (DEBUG>0)
+#define dbg(...) printk(__VA_ARGS__)
 #endif
+#if (DEBUG&(1|2|4) > 0)
+#define dbg_im(...) printk(__VA_ARGS__)
+#endif
+#if (DEBUG&(1|3|4) > 0)
+#define dbg_cr(...) printk(__VA_ARGS__)
+#endif
+
 #define FILP_NAME(f) 	(f->f_path.dentry->d_name.name)
 #define FILP_PARENT(f) 	(f->f_path.dentry->d_parent->d_name.name)
 #define FILP_FSIZE(f) 	(f->f_path.dentry->d_inode->i_size)
