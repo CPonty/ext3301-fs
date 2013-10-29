@@ -1,9 +1,11 @@
 /*
- *  linux/fs/ext2/crypter.c
+ *  linux/fs/ext2/ext3301util.c
+ *  Added to ext2 as part of the ext3301 improvements
  *
- *  Added to ext2 as part of the ext3301 fork
- *  Written by Chris Ponticello
+ *  Written by Chris Ponticello 
  * 	(christopher.ponticello@uqconnect.edu.au)
+ *
+ * 	Created 2013-10-23
  */
 
 #include <linux/time.h>

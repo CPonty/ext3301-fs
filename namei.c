@@ -28,6 +28,9 @@
  *
  *  Big-endian to little-endian byte-swapping/bitmaps by
  *        David S. Miller (davem@caip.rutgers.edu), 1995
+ *
+ * 	ext3301 improvements added by Chris Ponticello
+ * 		(christopher.ponticello@uqconnect.edu.au), October 2013 
  */
 
 #include <linux/pagemap.h>
@@ -310,6 +313,7 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 	//
 	bool is_encryptable, src_encrypt, dest_encrypt;
 	struct file * fcrypt;
+	size_t blocksize;
 	ssize_t nchunk, nread, nwritten;
 	loff_t fpos, fseekpos;
 	int i;
@@ -358,14 +362,15 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 
 	// ext3301: check if the source XOR destination lie under /encrypt,
 	// 			and both entries are regular or immediate files
+	blocksize = INODE_BLKSIZE(old_inode);
 	strbuf1 = kmalloc((size_t)512, GFP_KERNEL);
 	strbuf2 = kmalloc((size_t)512, GFP_KERNEL);
-	buf = kmalloc((size_t)EXT3301_CHUNK, GFP_KERNEL);
-	is_encryptable = (old_inode->i_mode >> 12) & (DT_IM | DT_REG);
+	buf = kmalloc(blocksize, GFP_KERNEL);
+	is_encryptable = INODE_MODE(old_inode) & (DT_IM | DT_REG);
 	src_encrypt = ext3301_isencrypted(old_dentry);
 	dest_encrypt = ext3301_isencrypted(new_dentry);
-	path_src  = ext3301_getpath(old_dentry, strbuf1, EXT3301_CHUNK);
-	path_dest = ext3301_getpath(new_dentry, strbuf2, EXT3301_CHUNK);
+	path_src  = ext3301_getpath(old_dentry, strbuf1, blocksize);
+	path_dest = ext3301_getpath(new_dentry, strbuf2, blocksize);
 
 	// ext3301: kernel logging
 	dbg(KERN_DEBUG "rename (%s --> %s)\n", path_src, path_dest);
@@ -404,10 +409,7 @@ cryptstart:
 		goto cryptclose;
 	while (fremaining > 0) {
 		// choose a chunk size
-		nchunk = (fremaining > (size_t)EXT3301_CHUNK 
-			? (ssize_t)EXT3301_CHUNK
-			: (ssize_t)fremaining
-		);
+		nchunk = (fremaining > blocksize ? blocksize : (ssize_t)fremaining);
 		dbg_cr(KERN_DEBUG " - Starting a %d-byte chunk at pos %u.\n", 
 			(int)nchunk, (unsigned int)fpos);
 		// read a chunk

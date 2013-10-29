@@ -9,6 +9,10 @@
  *  linux/include/linux/minix_fs.h
  *
  *  Copyright (C) 1991, 1992  Linus Torvalds
+ *
+ *  ext3301 improvements added by Chris Ponticello 
+ *  	(christopher.ponticello@uqconnect.edu.au), October 2013 
+
  */
 #include <linux/fs.h>
 #include <linux/ext2_fs.h>
@@ -811,10 +815,7 @@ ext2_group_first_block_no(struct super_block *sb, unsigned long group_no)
  * ext3301-specific
  */
 
-/* crypter.c */
-extern unsigned char crypter_key;
-extern const char * crypter_dir;
-
+// ext3301util.c Prototypes
 extern bool ext3301_cryptbuf(char __user * buf, size_t len);
 extern bool ext3301_isencrypted(struct dentry * dcheck);
 extern char * ext3301_getpath(struct dentry * dcheck, char * buf, int buflen);
@@ -826,8 +827,12 @@ extern ssize_t kfile_write(struct file * f, char * buf, size_t size,
 extern void kfile_sync(struct file * f);
 extern void kfile_close(struct file * f);
 
+// Global encryption definitions
+extern unsigned char crypter_key;
+extern const char * crypter_dir;
+
 #define DT_IM 9 // Immediate file type
-#define EXT3301_CHUNK EXT2_MIN_BLOCK_SIZE
+#define EXT3301_IMMEDIATE_MAX_SIZE 60 // Immediate file capacity
 
 /*
  * Debug flag; selectively enable logging ext3301-specific messages.
@@ -858,10 +863,15 @@ extern void kfile_close(struct file * f);
 #define dbg_cr(...) printk(__VA_ARGS__)
 #endif
 
-#define FILP_NAME(f) 	(f->f_path.dentry->d_name.name)
-#define FILP_PARENT(f) 	(f->f_path.dentry->d_parent->d_name.name)
-#define FILP_FSIZE(f) 	(f->f_path.dentry->d_inode->i_size)
-
+// File and inode struct shortcuts
+#define FILP_NAME(f) 		(f->f_path.dentry->d_name.name)
+#define FILP_PARENT(f) 		(f->f_path.dentry->d_parent->d_name.name)
+#define FILP_FSIZE(f) 		(f->f_path.dentry->d_inode->i_size)
+#define FILP_INODE(f) 		(f->f_path.dentry->d_inode)
+#define INODE_MODE(i)		(i->i_mode >> 12)
+#define INODE_LOCK(i)		mutex_lock_nested(&(i->i_mutex), I_MUTEX_QUOTA)
+#define INODE_UNLOCK(i)		mutex_unlock(&(i->i_mutex))
+#define INODE_BLKSIZE(i)	((size_t)(i->i_sb->s_blocksize))
 
 
 #define ext2_set_bit	__test_and_set_bit_le

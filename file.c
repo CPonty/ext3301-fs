@@ -16,6 +16,10 @@
  *
  *  64-bit file support on 64-bit platforms by Jakub Jelinek
  * 	(jj@sunsite.ms.mff.cuni.cz)
+ *
+ *  ext3301 improvements added by Chris Ponticello 
+ *  	(christopher.ponticello@uqconnect.edu.au), October 2013 
+
  */
 
 #include <linux/time.h>
@@ -65,9 +69,21 @@ int ext2_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 ssize_t ext3301_read(struct file * filp, char __user * buf, size_t len, 
 		loff_t * ppos) {
 	ssize_t ret;
-	ret = do_sync_read(filp, buf, len, ppos);	
 
 	dbg(KERN_DEBUG "Read: '%s'\n", FILP_NAME(filp));
+
+	//Check if the file is immediate (requires special read event)
+	i = FILP_INODE(filp);
+	if (INODE_MODE(i) & DT_IM) {
+		dbg_im(KERN_DEBUG "Immediate file\n");
+		//Lock the inode
+		//INODE_LOCK(i);
+
+		//Unlock the inode
+		//INODE_UNLOCK(i);
+	} else {
+		ret = do_sync_read(filp, buf, len, ppos);	
+	}
 
 	//Check if the file is in the encryption tree
 	if (ext3301_isencrypted(filp->f_path.dentry)) {
@@ -88,6 +104,7 @@ ssize_t ext3301_read(struct file * filp, char __user * buf, size_t len,
 ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len, 
 		loff_t * ppos) {
 	ssize_t ret;
+	struct inode * i;
 
 	dbg(KERN_DEBUG "Write: '%s'\n", FILP_NAME(filp));
 
@@ -98,7 +115,18 @@ ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len,
 		ext3301_cryptbuf(buf, len);
 	}
 
-	ret = do_sync_write(filp, buf, len, ppos);	
+	//Check if the file is immediate (requires special read event)
+	i = FILP_INODE(filp);
+	if (INODE_MODE(i) & DT_IM) {
+		dbg_im(KERN_DEBUG "Immediate file\n");
+		//Lock the inode
+		//INODE_LOCK(i);
+
+		//Unlock the inode
+		//INODE_UNLOCK(i);
+	} else {
+		ret = do_sync_write(filp, buf, len, ppos);	
+	}
 	return ret; 
 }
 
