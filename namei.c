@@ -96,12 +96,20 @@ struct dentry *ext2_get_parent(struct dentry *child)
  *
  * If the create succeeds, we fill in the inode information
  * with d_instantiate(). 
+ *
+ * ext3301: modified to force regular files to start as immediate files.
  */
 static int ext2_create (struct inode * dir, struct dentry * dentry, umode_t mode, bool excl)
 {
 	struct inode *inode;
 
 	dquot_initialize(dir);
+
+	dbg_im(KERN_DEBUG "Creating file, mode %x\n", mode);
+	if ((mode >> S_SHIFT) == DT_REG) {
+		mode = MODE_SET_IMMEDIATE(mode);
+		dbg_im(KERN_DEBUG "- Mode changed (Reg->Im): %x\n", mode);
+	}
 
 	inode = ext2_new_inode(dir, mode, &dentry->d_name);
 	if (IS_ERR(inode))

@@ -884,6 +884,9 @@ extern const char * crypter_dir;
 #define INODE_LOCK(i)		mutex_lock_nested(&(i->i_mutex), I_MUTEX_QUOTA)
 #define INODE_UNLOCK(i)		mutex_unlock(&(i->i_mutex))
 #define INODE_BLKSIZE(i)	((size_t)(i->i_sb->s_blocksize))
+#define INODE_PAYLOAD(i)	((char*)(EXT2_I(i)->i_data))
+
+#define MODE_SET_IMMEDIATE(m)	((((1<<S_SHIFT)-1) & m) | (DT_IM<<S_SHIFT))
 
 
 #define ext2_set_bit	__test_and_set_bit_le
