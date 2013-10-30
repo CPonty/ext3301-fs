@@ -127,15 +127,14 @@ ssize_t ext3301_reg2im(struct file * filp) {
  */
 ssize_t ext3301_read(struct file * filp, char __user * buf, size_t len, 
 		loff_t * ppos) {
-	struct inode * i;
+	struct inode * i = FILP_INODE(filp);
 	ssize_t ret = 0;
 
 	dbg(KERN_DEBUG "Read: '%s'\n", FILP_NAME(filp));
 
 	//Check if the file is immediate (requires special read behaviour)
-	i = FILP_INODE(filp);
 	if (INODE_MODE(i)==DT_IM) {
-		dbg_im(KERN_WARNING "- Read-immediate\n");
+		dbg_im(KERN_DEBUG "- Read-immediate\n");
 		ret = ext3301_read_immediate(filp, buf, len, ppos);	
 
 	} else {
@@ -176,14 +175,13 @@ ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len,
 	}
 
 	//Immediate file only: Check if it needs to grow into a regular file
-	if (INODE_MODE(i)==DT_IM && (*ppos+len > EXT3301_IMMEDIATE_MAX_SIZE)) {
+	if (INODE_MODE(i)==DT_IM && (*ppos+len > EXT3301_IM_SIZE(i))) {
 		dbg_im(KERN_DEBUG "- Im-->Reg conversion\n");
 		if (ext3301_im2reg(filp) < 0)
 			return -EIO;
 	}
 
 	//Write to file (immediate and regular files have different methods)
-	i = FILP_INODE(filp);
 	if (INODE_MODE(i)==DT_IM) {
 		dbg_im(KERN_DEBUG "- Write-immediate\n");
 		ret = ext3301_write_immediate(filp, buf, len, ppos);	
@@ -194,8 +192,7 @@ ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len,
 	}
 
 	//Regular file only: Check if it's small enough to convert to immediate
-	if (INODE_MODE(i)==DT_REG && 
-			FILP_FSIZE(filp)<=EXT3301_IMMEDIATE_MAX_SIZE) {
+	if (INODE_MODE(i)==DT_REG && (FILP_FSIZE(filp)<=EXT3301_IM_SIZE(i))) {
 		dbg_im(KERN_DEBUG "- Reg-->Im conversion\n");
 		if (ext3301_reg2im(filp) < 0)
 			return -EIO;

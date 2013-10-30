@@ -816,6 +816,7 @@ ext2_group_first_block_no(struct super_block *sb, unsigned long group_no)
  */
 
 // ext3301util.c Prototypes
+extern void init_ext3301_inode(struct inode *inode, umode_t mode, dev_t rdev);
 extern bool ext3301_cryptbuf(char __user * buf, size_t len);
 extern bool ext3301_isencrypted(struct dentry * dcheck);
 extern char * ext3301_getpath(struct dentry * dcheck, char * buf, int buflen);
@@ -831,9 +832,12 @@ extern void kfile_close(struct file * f);
 extern unsigned char crypter_key;
 extern const char * crypter_dir;
 
-#define EXT3301_IMMEDIATE_MAX_SIZE 60 // Immediate file capacity
-#define S_SHIFT 12 // Moved from dir.c so we have access to it here
-#define DT_IM 9 // Immediate file type
+// Capacity for immediate files (size of the inode data block pointer array)
+#define EXT3301_IM_SIZE(i) sizeof(EXT2_I(i)->i_data) 
+// Moved from dir.c so we have access to it here
+#define S_SHIFT 12 
+// Immediate file type
+#define DT_IM 9 
 #define S_IFIMM (DT_IM << S_SHIFT)
 
 /*
@@ -886,7 +890,8 @@ extern const char * crypter_dir;
 #define INODE_BLKSIZE(i)	((size_t)(i->i_sb->s_blocksize))
 #define INODE_PAYLOAD(i)	((char*)(EXT2_I(i)->i_data))
 
-#define MODE_SET_IMMEDIATE(m)	((((1<<S_SHIFT)-1) & m) | (DT_IM<<S_SHIFT))
+#define MODE_SET_IMMEDIATE(m)	((((1 << S_SHIFT)-1) & m) | S_IFIMM)
+#define S_ISIM(m)				((m >> S_SHIFT)==DT_IM)
 
 
 #define ext2_set_bit	__test_and_set_bit_le

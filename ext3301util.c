@@ -22,6 +22,17 @@ unsigned char crypter_key = 0;
 const char * crypter_dir = "encrypt";
 
 /*
+ * ext3301 init_ext3301_inode: wrapper for the linux kernel utility 
+ * 	init_special_inode (in /linux/fs/inode.c).
+ * Sole purpose of doing this is to suppress "bogus i_mode" messages
+ * 	when immediate files are created.
+ */
+void init_ext3301_inode(struct inode *inode, umode_t mode, dev_t rdev) {
+	if (!S_ISIM(mode))
+		init_special_inode(inode, mode, rdev);
+}
+
+/*
  * ext3301 cryptbuf: apply the encryption XOR byte cipher to a buffer in
  *  user space. Return 0 on success, >0  on failure.
  */

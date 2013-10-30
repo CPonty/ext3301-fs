@@ -130,6 +130,9 @@ static int ext2_create (struct inode * dir, struct dentry * dentry, umode_t mode
 	return ext2_add_nondir(dentry, inode);
 }
 
+/*
+ * ext3301: modified to use init_ext3301_inode()
+ */
 static int ext2_mknod (struct inode * dir, struct dentry *dentry, umode_t mode, dev_t rdev)
 {
 	struct inode * inode;
@@ -143,7 +146,7 @@ static int ext2_mknod (struct inode * dir, struct dentry *dentry, umode_t mode, 
 	inode = ext2_new_inode (dir, mode, &dentry->d_name);
 	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
-		init_special_inode(inode, inode->i_mode, rdev);
+		init_ext3301_inode(inode, inode->i_mode, rdev);
 #ifdef CONFIG_EXT2_FS_XATTR
 		inode->i_op = &ext2_special_inode_operations;
 #endif

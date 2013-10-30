@@ -20,6 +20,9 @@
  * 	(jj@sunsite.ms.mff.cuni.cz)
  *
  *  Assorted race fixes, rewrite of ext2_get_block() by Al Viro, 2000
+ *
+ *  ext3301 improvements added by Chris Ponticello 
+ *      (christopher.ponticello@uqconnect.edu.au), October 2013 
  */
 
 #include <linux/time.h>
@@ -1302,6 +1305,9 @@ void ext2_get_inode_flags(struct ext2_inode_info *ei)
 		ei->i_flags |= EXT2_DIRSYNC_FL;
 }
 
+/*
+ * ext3301: modified to use init_ext3301_inode()
+ */
 struct inode *ext2_iget (struct super_block *sb, unsigned long ino)
 {
 	struct ext2_inode_info *ei;
@@ -1413,10 +1419,10 @@ struct inode *ext2_iget (struct super_block *sb, unsigned long ino)
 	} else {
 		inode->i_op = &ext2_special_inode_operations;
 		if (raw_inode->i_block[0])
-			init_special_inode(inode, inode->i_mode,
+			init_ext3301_inode(inode, inode->i_mode,
 			   old_decode_dev(le32_to_cpu(raw_inode->i_block[0])));
 		else 
-			init_special_inode(inode, inode->i_mode,
+			init_ext3301_inode(inode, inode->i_mode,
 			   new_decode_dev(le32_to_cpu(raw_inode->i_block[1])));
 	}
 	brelse (bh);
