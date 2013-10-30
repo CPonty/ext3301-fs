@@ -848,7 +848,7 @@ extern const char * crypter_dir;
  *	3	Encryption 
  *	4	All
  */
-#define DEBUG 2
+#define DEBUG 0
 
 /*
  * Debug print functions (arguments map directly to printk).

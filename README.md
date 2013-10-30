@@ -13,3 +13,7 @@ and the immediate file type.
 and working with user-space buffers.
 * namei.c contains the modified ext2_rename() function (handling encryption of moved files).
 * super.c contains the modified parse_options() function (handling reading the encryption key).
+
+Known bugs/incomplete features:
+* Switching between immediate and regular files is not fully implemented. The partial implementation is viewable in file.c
+* Immediate files are functional, however after the filesystem is unmounted and re-mounted they can no longer be written/read to

@@ -426,8 +426,6 @@ cryptstart:
 		// read a chunk
 		fpos = fseekpos;
 		nread = kfile_read(fcrypt, buf, (size_t)nchunk, &fpos);
-		//dbg_cr(KERN_DEBUG " - Read block, got ssize_t %d\n", 
-		//	(int)nread);
 		// check we read a good number of bytes
 		//	this inequality covers error conditions (nread<0) and 
 		//	partial reads (0<=nread<=nchunk && nread != nchunk)
@@ -441,8 +439,6 @@ cryptstart:
 		// write the chunk back
 		fpos = fseekpos;
 		nwritten = kfile_write(fcrypt, buf, (size_t)nchunk, &fpos);
-		//dbg_cr(KERN_DEBUG " - Wrote block, got ssize_t %d\n", 
-		//	(int)nwritten);
 		// check we wrote back successfully
 		if (nwritten != nchunk) {
 			kfile_close(fcrypt);
@@ -462,10 +458,10 @@ cryptclose:
 cryptfail:
 	// ext3301: encrypt/decrypt failed
 	if (dest_encrypt)
-		dbg(KERN_WARNING "Encrypting file moved to /%s failed\n",
+		printk(KERN_WARNING "Encrypting file moved to /%s failed\n",
 				crypter_dir);
 	else if (src_encrypt)
-		dbg(KERN_WARNING "Decrypting file moved from /%s failed\n",
+		printk(KERN_WARNING "Decrypting file moved from /%s failed\n",
 				crypter_dir);
 	goto cryptdone;
 

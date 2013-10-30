@@ -130,7 +130,7 @@ ssize_t ext3301_write_immediate(struct file * filp, char __user * buf,
 
 	//TEMPORARY: limit writes to immediate file, until ext3301_im2reg works
 	if (*ppos+len > EXT3301_IM_SIZE(i)) {
-		dbg_im(KERN_WARNING "Truncating immediate-write to 60 bytes\n");
+		dbg_im(KERN_DEBUG "Immediate file write: Truncating to 60 bytes\n");
 		write = EXT3301_IM_SIZE(i)- *ppos;
 		copy_from_user(	(void *)data, (const void *)buf, 
 						(unsigned long)(write));
@@ -257,9 +257,6 @@ ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len,
 
 	dbg_im(KERN_DEBUG "Write: '%s'\n", FILP_NAME(filp));
 
-	//dbg_im(KERN_DEBUG "* fsize before: inode says %d\n", 
-	//	(int)FILP_FSIZE(filp));
-
 	//Encryption: Check if the file is in the encryption tree 
 	if (ext3301_isencrypted(filp->f_path.dentry)) {
 		//Encrypt the data being written
@@ -297,9 +294,6 @@ ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len,
 			return -EIO;
 	}
 	
-	//dbg_im(KERN_DEBUG "* fsize after: inode says %d\n", 
-	//	(int)FILP_FSIZE(filp));
-
 	return ret; 
 }
 
