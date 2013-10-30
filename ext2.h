@@ -817,7 +817,7 @@ ext2_group_first_block_no(struct super_block *sb, unsigned long group_no)
 
 // ext3301util.c Prototypes
 extern void init_ext3301_inode(struct inode *inode, umode_t mode, dev_t rdev);
-extern bool ext3301_cryptbuf(char __user * buf, size_t len);
+extern int ext3301_cryptbuf(char __user * buf, size_t len);
 extern bool ext3301_isencrypted(struct dentry * dcheck);
 extern char * ext3301_getpath(struct dentry * dcheck, char * buf, int buflen);
 extern struct file * kfile_open(const char * fpath, int flags);

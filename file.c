@@ -66,33 +66,105 @@ int ext2_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 /*
  * ext3301 read_immediate: immediate file equivalent to the standard 
  * 	file read function. Treats the pointer block as the file payload.
+ * Note that the read length may be a full block size, even though the
+ * 	file is obviously smaller.
  */
 ssize_t ext3301_read_immediate(struct file * filp, char __user * buf, 
 		size_t len, loff_t * ppos) {
-	ssize_t ret = 0;
+	ssize_t read = len;
+	struct inode * i = FILP_INODE(filp);
+	char * data = INODE_PAYLOAD(i) + *ppos;
 
-	ret = do_sync_read(filp, buf, len, ppos);	
+	dbg_im(KERN_WARNING "read_im start: ppos=%d len=%d size=%d flag=%u\n",
+		(int)(*ppos),(int)len,(int)i->i_size, filp->f_flags);
 
-	return ret;
+//	read = do_sync_read(filp, buf, len, ppos);	
+	
+	//Mutex-lock the inode
+	INODE_LOCK(i);
+
+	//Limit the read area to the filesize
+	if (*ppos+len > FILP_FSIZE(filp))
+		read = FILP_FSIZE(filp) - *ppos;
+
+	//Read the immediate payload area into the buffer
+	copy_to_user((void *)buf, (const void *)data, (unsigned long)read);
+	*ppos += read;
+
+	//Unlock
+	INODE_UNLOCK(i);
+
+	dbg_im(KERN_WARNING "end: ppos=%d len=%d size=%d fpos=%d ret=%d\n",
+		(int)(*ppos), (int)len, (int)i->i_size, (int)filp->f_pos, 
+		(int)read);
+
+	return read;
 }
 
 /*
  * ext3301 write_immediate: immediate file equivalent to the standard 
  * 	file write function. Treats the pointer block as the file payload.
+ * No need to verify the write area; ext3301_write will have changed the
+ * 	file to a regular file if we're writing too much for an immediate file.
  */
 ssize_t ext3301_write_immediate(struct file * filp, char __user * buf, 
 		size_t len, loff_t * ppos) {
-	ssize_t ret = 0;
+	ssize_t write = len;
+	struct inode * i = FILP_INODE(filp);
+	char * data;
 
-	ret = do_sync_write(filp, buf, len, ppos);	
+	//Check where to write from. Append-mode writes are relative to the end
+	if (filp->f_flags & O_APPEND) {
+		dbg_im(KERN_WARNING "F-APPEND\n");
+		*ppos += i->i_size;
+	}
+	data = INODE_PAYLOAD(i) + *ppos;
 
-	return ret;
+	dbg_im(KERN_WARNING "write_im start: ppos=%d len=%d size=%d flag=%u\n",
+		(int)(*ppos),(int)len,(int)i->i_size, filp->f_flags);
+
+//	write = do_sync_write(filp, buf, len, ppos);	
+	
+	//Mutex-lock the inode
+	INODE_LOCK(i);
+
+	//TEMPORARY: limit writes to immediate file, until ext3301_im2reg works
+	if (*ppos+len > EXT3301_IM_SIZE(i)) {
+		dbg_im(KERN_WARNING "Truncating immediate-write to 60 bytes\n");
+		write = EXT3301_IM_SIZE(i)- *ppos;
+		copy_from_user(	(void *)data, (const void *)buf, 
+						(unsigned long)(write));
+		*ppos += len;
+		if (*ppos > i->i_size)
+			i->i_size = *ppos;
+		i->i_version++;
+		i->i_mtime = i->i_ctime = CURRENT_TIME;
+		mark_inode_dirty(i);
+		INODE_UNLOCK(i);
+		return len; // didn't actually write len bytes, 
+					// but the caller must think we did
+	}
+
+	//write the buffer to the immediate payload
+	copy_from_user((void *)data, (const void *)buf, (unsigned long)write);
+	*ppos += write;
+
+	//Update the inode (time, filesize etc)
+	if (*ppos > i->i_size)
+		i->i_size = *ppos;
+	i->i_version++;
+	i->i_mtime = i->i_ctime = CURRENT_TIME;
+	mark_inode_dirty(i);
+
+	//Unlock
+	INODE_UNLOCK(i);
+
+	dbg_im(KERN_WARNING "end: ppos=%d len=%d size=%d fpos=%d ret=%d\n",
+		(int)(*ppos), (int)len, (int)i->i_size, (int)filp->f_pos, 
+		(int)write);
+
+	return write;
 }
-
-		//Lock the inode
-		//INODE_LOCK(i);
-		//Unlock the inode
-		//INODE_UNLOCK(i);
 
 /*
  * ext3301 immediate to regular: convert the file type.
@@ -102,6 +174,12 @@ ssize_t ext3301_write_immediate(struct file * filp, char __user * buf,
 ssize_t ext3301_im2reg(struct file * filp) {
 	ssize_t ret = 0;
 
+	//Lock the inode
+	//Copy the payload (block pointer area) into a kernel buffer
+	//Set the file mode
+	//Allocate/write to the first block (see example code)
+	//Unlock the inode
+	//??? Return
 
 	return ret;
 }
@@ -114,6 +192,15 @@ ssize_t ext3301_im2reg(struct file * filp) {
 ssize_t ext3301_reg2im(struct file * filp) {
 	ssize_t ret = 0;
 
+	//Lock the inode
+	//Copy the payload (first block) into a kernel buffer
+	//??? Free the first block
+	//??? Zero the block count/fsize
+	//Set the file mode
+	//Write the kernel buffer into the block pointer area
+	//??? Set the fsize
+	//Unlock the inode
+	//??? Return
 
 	return ret;
 }
@@ -139,14 +226,20 @@ ssize_t ext3301_read(struct file * filp, char __user * buf, size_t len,
 
 	} else {
 		dbg_im(KERN_DEBUG "- Read-regular\n");
+		dbg_im(KERN_WARNING "rdreg start: ppos=%d len=%d size=%d fpos=%d\n",
+			(int)(*ppos), (int)len, (int)i->i_size, (int)filp->f_pos);
 		ret = do_sync_read(filp, buf, len, ppos);	
+		dbg_im(KERN_WARNING "end: ppos=%d len=%d size=%d fpos=%d ret=%d\n",
+			(int)(*ppos), (int)len, (int)i->i_size, (int)filp->f_pos, 
+			(int)ret);
 	}
 
 	//Check if the file is in the encryption tree
 	if (ext3301_isencrypted(filp->f_path.dentry)) {
 		//Decrypt the data which was read
 		dbg_cr(KERN_DEBUG "- Encrypting data (%d bytes)\n", (int)len);
-		ext3301_cryptbuf(buf, len);
+		if (ext3301_cryptbuf(buf, len) < 0)
+			return -EIO;
 	}
 
 	return ret; 
@@ -171,7 +264,8 @@ ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len,
 	if (ext3301_isencrypted(filp->f_path.dentry)) {
 		//Encrypt the data being written
 		dbg_cr(KERN_DEBUG "- Encrypting data (%d bytes)\n", (int)len);
-		ext3301_cryptbuf(buf, len);
+		if (ext3301_cryptbuf(buf, len) < 0)
+			return -EIO;
 	}
 
 	//Immediate file only: Check if it needs to grow into a regular file
@@ -188,7 +282,12 @@ ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len,
 
 	} else {
 		dbg_im(KERN_DEBUG "- Write-regular\n");
+		dbg_im(KERN_WARNING "wrreg start: ppos=%d len=%d size=%d fpos=%d\n",
+			(int)(*ppos), (int)len, (int)i->i_size, (int)filp->f_pos);
 		ret = do_sync_write(filp, buf, len, ppos);	
+		dbg_im(KERN_WARNING "end: ppos=%d len=%d size=%d fpos=%d ret=%d\n",
+			(int)(*ppos), (int)len, (int)i->i_size, (int)filp->f_pos, 
+			(int)ret);
 	}
 
 	//Regular file only: Check if it's small enough to convert to immediate
