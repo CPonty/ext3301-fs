@@ -61,74 +61,153 @@ int ext2_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	return ret;
 }
 
+// --------------------------------------------------------------------
+
+/*
+ * ext3301 read_immediate: immediate file equivalent to the standard 
+ * 	file read function. Treats the pointer block as the file payload.
+ */
+ssize_t ext3301_read_immediate(struct file * filp, char __user * buf, 
+		size_t len, loff_t * ppos) {
+	ssize_t ret = 0;
+
+	ret = do_sync_read(filp, buf, len, ppos);	
+
+	return ret;
+}
+
+/*
+ * ext3301 write_immediate: immediate file equivalent to the standard 
+ * 	file write function. Treats the pointer block as the file payload.
+ */
+ssize_t ext3301_write_immediate(struct file * filp, char __user * buf, 
+		size_t len, loff_t * ppos) {
+	ssize_t ret = 0;
+
+	ret = do_sync_write(filp, buf, len, ppos);	
+
+	return ret;
+}
+
+		//Lock the inode
+		//INODE_LOCK(i);
+		//Unlock the inode
+		//INODE_UNLOCK(i);
+
+/*
+ * ext3301 immediate to regular: convert the file type.
+ * 	filesize should be > EXT3301_IMMEDIATE_MAX_SIZE.
+ *	Returns 0 on success, -EIO on failure.
+ */
+ssize_t ext3301_im2reg(struct file * filp) {
+	ssize_t ret = 0;
+
+
+	return ret;
+}
+
+/*
+ * ext3301 regular to immediate: convert the file type.
+ * 	filesize should be <= EXT3301_IMMEDIATE_MAX_SIZE.
+ *	Returns 0 on success, -EIO on failure.
+ */
+ssize_t ext3301_reg2im(struct file * filp) {
+	ssize_t ret = 0;
+
+
+	return ret;
+}
+
+// --------------------------------------------------------------------
+
 /* 
- * ext3301 variant of the standard file read function.
+ * ext3301 read: wrapper for the standard file read function.
  *  modifications: handling encryption and immediate files.
  *  original: do_sync_read
  */
 ssize_t ext3301_read(struct file * filp, char __user * buf, size_t len, 
 		loff_t * ppos) {
-	ssize_t ret;
+	struct inode * i;
+	ssize_t ret = 0;
 
 	dbg(KERN_DEBUG "Read: '%s'\n", FILP_NAME(filp));
 
-	//Check if the file is immediate (requires special read event)
+	//Check if the file is immediate (requires special read behaviour)
 	i = FILP_INODE(filp);
-	if (INODE_MODE(i) & DT_IM) {
-		dbg_im(KERN_DEBUG "Immediate file\n");
-		//Lock the inode
-		//INODE_LOCK(i);
+	if (INODE_MODE(i)==DT_IM) {
+		dbg_im(KERN_WARNING "- Read-immediate\n");
+		ret = ext3301_read_immediate(filp, buf, len, ppos);	
 
-		//Unlock the inode
-		//INODE_UNLOCK(i);
 	} else {
+		dbg_im(KERN_DEBUG "- Read-regular\n");
 		ret = do_sync_read(filp, buf, len, ppos);	
 	}
 
 	//Check if the file is in the encryption tree
 	if (ext3301_isencrypted(filp->f_path.dentry)) {
 		//Decrypt the data which was read
-		dbg_cr(KERN_DEBUG "Reading encrypted file (%d bytes)\n", (int)len);
+		dbg_cr(KERN_DEBUG "- Encrypting data (%d bytes)\n", (int)len);
 		ext3301_cryptbuf(buf, len);
 	}
 
 	return ret; 
 }
 
-
 /*
- * ext3301 variant of the standard file write function.
+ * ext3301 write: wrapper for the standard file write function.
  *  modifications: handling encryption and immediate files.
  *  original: do_sync_write
  */
 ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len, 
 		loff_t * ppos) {
-	ssize_t ret;
-	struct inode * i;
+	ssize_t ret = 0;
+	struct inode * i = FILP_INODE(filp);
 
-	dbg(KERN_DEBUG "Write: '%s'\n", FILP_NAME(filp));
+	dbg_im(KERN_DEBUG "Write: '%s'\n", FILP_NAME(filp));
 
-	//Check if the file is in the encryption tree 
+	//dbg_im(KERN_DEBUG "* fsize before: inode says %d\n", 
+	//	(int)FILP_FSIZE(filp));
+
+	//Encryption: Check if the file is in the encryption tree 
 	if (ext3301_isencrypted(filp->f_path.dentry)) {
 		//Encrypt the data being written
-		dbg_cr(KERN_DEBUG "Writing encrypted file (%d bytes)\n", (int)len);
+		dbg_cr(KERN_DEBUG "- Encrypting data (%d bytes)\n", (int)len);
 		ext3301_cryptbuf(buf, len);
 	}
 
-	//Check if the file is immediate (requires special read event)
-	i = FILP_INODE(filp);
-	if (INODE_MODE(i) & DT_IM) {
-		dbg_im(KERN_DEBUG "Immediate file\n");
-		//Lock the inode
-		//INODE_LOCK(i);
+	//Immediate file only: Check if it needs to grow into a regular file
+	if (INODE_MODE(i)==DT_IM && (*ppos+len > EXT3301_IMMEDIATE_MAX_SIZE)) {
+		dbg_im(KERN_DEBUG "- Im-->Reg conversion\n");
+		if (ext3301_im2reg(filp) < 0)
+			return -EIO;
+	}
 
-		//Unlock the inode
-		//INODE_UNLOCK(i);
+	//Write to file (immediate and regular files have different methods)
+	i = FILP_INODE(filp);
+	if (INODE_MODE(i)==DT_IM) {
+		dbg_im(KERN_DEBUG "- Write-immediate\n");
+		ret = ext3301_write_immediate(filp, buf, len, ppos);	
+
 	} else {
+		dbg_im(KERN_DEBUG "- Write-regular\n");
 		ret = do_sync_write(filp, buf, len, ppos);	
 	}
+
+	//Regular file only: Check if it's small enough to convert to immediate
+	if (INODE_MODE(i)==DT_REG && 
+			FILP_FSIZE(filp)<=EXT3301_IMMEDIATE_MAX_SIZE) {
+		dbg_im(KERN_DEBUG "- Reg-->Im conversion\n");
+		if (ext3301_reg2im(filp) < 0)
+			return -EIO;
+	}
+	
+	//dbg_im(KERN_DEBUG "* fsize after: inode says %d\n", 
+	//	(int)FILP_FSIZE(filp));
+
 	return ret; 
 }
+
+// --------------------------------------------------------------------
 
 /*
  * We have mostly NULL's here: the current defaults are ok for

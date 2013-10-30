@@ -457,7 +457,7 @@ static int parse_options(char *options, struct super_block *sb)
 				return 0;
 			}
 			crypter_key = (unsigned int)option;
-			printk(KERN_DEBUG "Ext3301 encryption: enabled with 0x%.2x\n", crypter_key);
+			dbg(KERN_DEBUG "Ext3301 encryption: enabled with 0x%.2x\n", crypter_key);
 			break;
 		case Opt_bsd_df:
 			clear_opt (sbi->s_mount_opt, MINIX_DF);

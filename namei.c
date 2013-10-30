@@ -318,8 +318,7 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 	loff_t fpos, fseekpos;
 	int i;
 	unsigned int fsize, fremaining;
-	char * buf, * strbuf1, * strbuf2;
-	char * path_src, * path_dest;
+	char * buf, * strbuf1, * strbuf2, * path_src, * path_dest;
 
 	dquot_initialize(old_dir);
 	dquot_initialize(new_dir);
@@ -366,7 +365,8 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 	strbuf1 = kmalloc((size_t)512, GFP_KERNEL);
 	strbuf2 = kmalloc((size_t)512, GFP_KERNEL);
 	buf = kmalloc(blocksize, GFP_KERNEL);
-	is_encryptable = INODE_MODE(old_inode) & (DT_IM | DT_REG);
+	is_encryptable = (INODE_MODE(old_inode)==DT_IM || \
+					  INODE_MODE(old_inode)==DT_REG);
 	src_encrypt = ext3301_isencrypted(old_dentry);
 	dest_encrypt = ext3301_isencrypted(new_dentry);
 	path_src  = ext3301_getpath(old_dentry, strbuf1, blocksize);

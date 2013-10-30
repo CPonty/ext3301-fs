@@ -267,7 +267,6 @@ static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {
 	[EXT2_FT_IMMEDIATE]	= DT_IM,
 };
 
-#define S_SHIFT 12
 static unsigned char ext2_type_by_mode[S_IFMT >> S_SHIFT] = {
 	[S_IFREG >> S_SHIFT]	= EXT2_FT_REG_FILE,
 	[S_IFDIR >> S_SHIFT]	= EXT2_FT_DIR,
@@ -276,6 +275,7 @@ static unsigned char ext2_type_by_mode[S_IFMT >> S_SHIFT] = {
 	[S_IFIFO >> S_SHIFT]	= EXT2_FT_FIFO,
 	[S_IFSOCK >> S_SHIFT]	= EXT2_FT_SOCK,
 	[S_IFLNK >> S_SHIFT]	= EXT2_FT_SYMLINK,
+	[S_IFIMM >> S_SHIFT]	= EXT2_FT_IMMEDIATE,
 };
 
 static inline void ext2_set_de_type(ext2_dirent *de, struct inode *inode)

@@ -831,8 +831,10 @@ extern void kfile_close(struct file * f);
 extern unsigned char crypter_key;
 extern const char * crypter_dir;
 
-#define DT_IM 9 // Immediate file type
 #define EXT3301_IMMEDIATE_MAX_SIZE 60 // Immediate file capacity
+#define S_SHIFT 12 // Moved from dir.c so we have access to it here
+#define DT_IM 9 // Immediate file type
+#define S_IFIMM (DT_IM << S_SHIFT)
 
 /*
  * Debug flag; selectively enable logging ext3301-specific messages.
@@ -842,7 +844,7 @@ extern const char * crypter_dir;
  *	3	Encryption 
  *	4	All
  */
-#define DEBUG 0
+#define DEBUG 2
 
 /*
  * Debug print functions (arguments map directly to printk).
@@ -850,25 +852,35 @@ extern const char * crypter_dir;
  * 	dbg_cr	Encryption message
  * 	dbg		Both
  */
+#if (DEBUG==0)
 #define dbg(...) 	do{}while(0)
 #define dbg_im(...) do{}while(0)
 #define dbg_cr(...) do{}while(0)
-#if (DEBUG>0)
+#elif (DEBUG==1)
 #define dbg(...) printk(__VA_ARGS__)
-#endif
-#if (DEBUG&(1|2|4) > 0)
+#define dbg_im(...) do{}while(0)
+#define dbg_cr(...) do{}while(0)
+#elif (DEBUG==2)
+#define dbg(...) printk(__VA_ARGS__)
 #define dbg_im(...) printk(__VA_ARGS__)
-#endif
-#if (DEBUG&(1|3|4) > 0)
+#define dbg_cr(...) do{}while(0)
+#elif (DEBUG==3)
+#define dbg(...) printk(__VA_ARGS__)
+#define dbg_im(...) do{}while(0)
+#define dbg_cr(...) printk(__VA_ARGS__)
+#elif (DEBUG==4)
+#define dbg(...) printk(__VA_ARGS__)
+#define dbg_im(...) printk(__VA_ARGS__)
 #define dbg_cr(...) printk(__VA_ARGS__)
 #endif
+
 
 // File and inode struct shortcuts
 #define FILP_NAME(f) 		(f->f_path.dentry->d_name.name)
 #define FILP_PARENT(f) 		(f->f_path.dentry->d_parent->d_name.name)
 #define FILP_FSIZE(f) 		(f->f_path.dentry->d_inode->i_size)
 #define FILP_INODE(f) 		(f->f_path.dentry->d_inode)
-#define INODE_MODE(i)		(i->i_mode >> 12)
+#define INODE_MODE(i)		(i->i_mode >> S_SHIFT)
 #define INODE_LOCK(i)		mutex_lock_nested(&(i->i_mutex), I_MUTEX_QUOTA)
 #define INODE_UNLOCK(i)		mutex_unlock(&(i->i_mutex))
 #define INODE_BLKSIZE(i)	((size_t)(i->i_sb->s_blocksize))
