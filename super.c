@@ -14,6 +14,10 @@
  *
  *  Big-endian to little-endian byte-swapping/bitmaps by
  *        David S. Miller (davem@caip.rutgers.edu), 1995
+ *
+ *  ext3301 improvements added by Chris Ponticello 
+ *      (christopher.ponticello@uqconnect.edu.au), October 2013 
+ *
  */
 
 #include <linux/module.h>

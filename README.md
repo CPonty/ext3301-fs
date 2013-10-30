@@ -12,3 +12,4 @@ and the immediate file type.
 * ext3301util.c contains utility functions: a suite of file operations, utilities for building and analysing file paths,
 and working with user-space buffers.
 * namei.c contains the modified ext2_rename() function (handling encryption of moved files).
+* super.c contains the modified parse_options() function (handling reading the encryption key).
