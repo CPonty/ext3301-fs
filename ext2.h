@@ -880,20 +880,21 @@ extern const char * crypter_dir;
 
 
 // File, inode, mode struct shortcuts
-#define FILP_NAME(f) 		(f->f_path.dentry->d_name.name)
-#define FILP_PARENT(f) 		(f->f_path.dentry->d_parent->d_name.name)
-#define FILP_FSIZE(f) 		(f->f_inode->i_size)
-#define FILP_INODE(f) 		(f->f_inode)
+#define FILP_NAME(f) 		(f->f_dentry->d_name.name)
+#define FILP_PARENT(f) 		(f->f_dentry->d_parent->d_name.name)
+#define FILP_FSIZE(f) 		(f->f_dentry->d_inode->i_size)
+#define FILP_INODE(f) 		(f->f_dentry->d_inode)
 #define FILP_FLAGS(f) 		(f->f_flags)
-#define FILP_INO(f) 		(f->f_inode->i_ino)
+#define FILP_INO(f) 		(f->f_dentry->d_inode->i_ino)
 
+#define INODE_SUPER(i) 		(i->i_sb)
 #define INODE_INO(i) 		(i->i_ino)
 #define INODE_ISIZE(i) 		(i->i_size)
 #define INODE_MODE(i)		(i->i_mode)
 #define INODE_TYPE(i)		(i->i_mode >> S_SHIFT)
 #define INODE_LOCK(i)		mutex_lock_nested(&(i->i_mutex), I_MUTEX_QUOTA)
 #define INODE_UNLOCK(i)		mutex_unlock(&(i->i_mutex))
-#define INODE_BLKSIZE(i)	((size_t)(i->i_sb->s_blocksize))
+#define INODE_BLKSIZE(i)	(i->i_sb->s_blocksize)
 #define INODE_PAYLOAD(i)	((char*)(EXT2_I(i)->i_data))
 
 #define MODE_TYPE(m)		(m >> S_SHIFT)

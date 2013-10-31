@@ -26,6 +26,7 @@
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
 #include <linux/kernel.h>
+#include <linux/buffer_head.h>
 #include "ext2.h"
 #include "xattr.h"
 #include "acl.h"
@@ -125,7 +126,7 @@ ssize_t ext3301_write_immediate(struct file * filp, char __user * buf,
 
 	//TEMPORARY: limit writes to immediate file, until ext3301_im2reg works
 	if (*ppos+len > EXT3301_IM_SIZE(i)) {
-		dbg_im(KERN_DEBUG "Immediate file write: Truncating to 60 bytes\n");
+		dbg_im(KERN_DEBUG "- Immediate file write: Truncating to 60 bytes\n");
 		write = EXT3301_IM_SIZE(i)- *ppos;
 		copy_from_user(	(void *)data, (const void *)buf, 
 						(unsigned long)(write));
@@ -166,53 +167,76 @@ ssize_t ext3301_write_immediate(struct file * filp, char __user * buf,
  *	Returns 0 on success, <0 on failure.
  */
 ssize_t ext3301_im2reg(struct file * filp) {
-	ssize_t l;
-	ssize_t ret;
-	struct inode * i = FILP_INODE(filp);
 	char * data;
+	struct buffer_head * bh, search_bh;
+	int err = 0;
+	long block_offset = 0;
+	struct inode * i = FILP_INODE(filp);
+	ssize_t l = INODE_ISIZE(i);
+	unsigned long blocksize = INODE_BLKSIZE(i);
 
-	dbg_im(KERN_WARNING "im2reg l=%d\n", (int)INODE_ISIZE(i));
-	
-	//Special case: file length is zero
-	if (INODE_ISIZE(i)==0) {
-		INODE_LOCK(i);
-		INODE_MODE(i) = MODE_SET_REG(INODE_MODE(i));
-		INODE_UNLOCK(i);
-		mark_inode_dirty(i);
-		return 0;
+	dbg_im(KERN_DEBUG "- im2reg l=%d\n", (int)INODE_ISIZE(i));
+
+	if (l > EXT3301_IM_SIZE(i)) {
+		dbg_im(KERN_DEBUG " - Immediate file >60 bytes found!\n");
+		return -EIO;
 	}
 
-	//Lock the inode
+	// Lock the inode
 	INODE_LOCK(i);
 
-	//Copy the payload (block pointer area) into a buffer
-	if ((l = INODE_ISIZE(i)) > EXT3301_IM_SIZE(i))
-		return -EIO;
+	// Set the file type to regular
+	INODE_MODE(i) = MODE_SET_REG(INODE_MODE(i));
+
+	// Special case: file length is zero, nothing else to do
+	if (l==0)
+		goto out;
+
+	// Read the payload (block pointer area) into a buffer
 	if (!(data = kmalloc((size_t)l, GFP_KERNEL)))
 		return -ENOMEM;
 	memcpy((void *)data, (const void *)INODE_PAYLOAD(i), (size_t)l);
-	////Zero the block pointers
-	//memset((void *)INODE_PAYLOAD(i), 0, (size_t)EXT3301_IM_SIZE(i));
 
-	//Set the file type, update mode
-	INODE_MODE(i) = MODE_SET_REG(INODE_MODE(i));
-	//DON'T zero the file length - later when we go to write to blocks,
-	//	it will try and free the page.
-	//INODE_ISIZE(i) = 0;
-	//FILP_FSIZE(filp) = 0; //update the file pointer too?
-	//
-	//Unlock the inode
-	INODE_UNLOCK(i);
+	// Zero the block pointer area (otherwise get_block will treat our old
+	// 	immediate data as block pointers, and follow them...)
+	memset((void *)INODE_PAYLOAD(i), 0, (size_t)EXT3301_IM_SIZE(i));
 
-	//Allocate/write to the first block (hijack symlink function)
-	if ((ret = page_symlink(i, data, l))) {
-		dbg_im(KERN_WARNING "page_symlink failed with %d\n", (int)ret);
-		return ret;
+	// Use a buffer head to find the block number (of the first data block)
+	search_bh.b_state = 0;
+	search_bh.b_size = blocksize;
+	err = ext2_get_block(i, block_offset, &search_bh, true);
+	//err = ext2_get_block(i, 0, &search_bh, 1);
+	if (err < 0) {
+		dbg_im(KERN_DEBUG " - ext2_get_block() failed\n");
+		goto out;
 	}
+	
+	// Retrieve and lock a paged buffer head to the block number
+	bh = sb_getblk(INODE_SUPER(i), search_bh.b_blocknr);
+	if (bh==NULL) {
+		dbg_im(KERN_DEBUG " - sb_getblk() failed\n");
+		err = -EIO;
+		goto out;
+	}
+	lock_buffer(bh);
 
-	//Succeeded - mark node as dirty, return success.
+	// Write (directly) to the buffer
+	memcpy((void *)(bh->b_data), (const void *)data, (size_t)l);
+
+	// Flush the paged buffer to disk: mark as dirty, unlock, sync, release.
+	flush_dcache_page(bh->b_page);
+	set_buffer_uptodate(bh);
+	mark_buffer_dirty(bh);
+	unlock_buffer(bh);
+	sync_dirty_buffer(bh);
+	brelse(bh);
+
+out:
+	// Finished - unlock the inode and mark it as dirty.
+	// 	Note we haven't updated the ctime, filesize or anything else.
+	INODE_UNLOCK(i);
 	mark_inode_dirty(i);
-	return 0;
+	return err;
 }
 
 /*
@@ -298,17 +322,23 @@ ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len,
 
 	//Immediate file only: walk ppos forward manually for Append mode
 	if (I_ISIM(i) && (FILP_FLAGS(filp) & O_APPEND)) {
-		dbg_im(KERN_WARNING "O_APPEND: walking ppos to EoF\n");
+		dbg_im(KERN_DEBUG "O_APPEND: walking ppos to EoF\n");
 		*ppos += INODE_ISIZE(i);
 	}
 
 	//Immediate file only: Check if it needs to grow into a regular file
 	if (I_ISIM(i) && (*ppos+len > EXT3301_IM_SIZE(i))) {
-		dbg_im(KERN_WARNING "- IM-->REG conversion\n");
+		dbg_im(KERN_DEBUG "- IM-->REG conversion\n");
 		if ((ret = ext3301_im2reg(filp)) < 0) {
-			printk(KERN_DEBUG "IM-->REG file conversion failed: ino %lu\n",
-				INODE_INO(i));
+			printk(KERN_DEBUG "IM-->REG conversion fail: ino %lu, err %d\n",
+				INODE_INO(i), (int)ret);
 			return ret;
+		}
+		//Append mode: undo the ppos offset. We are now writing to a
+		//regular file, and the default methods already handle this.
+		if (FILP_FLAGS(filp) & O_APPEND) {
+			dbg_im(KERN_DEBUG "O_APPEND: walking ppos back (REG)\n");
+			*ppos -= INODE_ISIZE(i);
 		}
 	}
 
