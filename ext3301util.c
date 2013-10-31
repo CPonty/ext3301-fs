@@ -36,25 +36,41 @@ void init_ext3301_inode(struct inode *inode, umode_t mode, dev_t rdev) {
  * ext3301 cryptbuf: apply the encryption XOR byte cipher to a buffer in
  *  user space. Return 0 on success, <0 on failure.
  */
-int ext3301_cryptbuf(char __user * buf, size_t len) {
+int ext3301_cryptbuf(char __user * buf, size_t l) {
 	char * kbuf;
+	int err = 0;
 	size_t i;
-	if (!len)
+
+	// special case: nothing to encrypt
+	if (!l)
 		return 0;
-	if (!(kbuf = kmalloc(len, GFP_KERNEL)))
-		return -1;
-	if (copy_from_user((void *)kbuf, (const void *)buf, (unsigned long)len)) {
-		kfree(kbuf);
-		return -2;
+
+	// allocate kernel buffer
+	kbuf = kmalloc(l, GFP_KERNEL);
+	if (!kbuf)
+		return -ENOMEM;
+
+	// copy user-space payload into kernel buffer
+	err = copy_from_user((void *)kbuf, (const void *)buf, (unsigned long)l);
+	if (err) {
+		err = -EACCES;
+		goto out;
 	}
-	for (i=0; i<len; i++)
+
+	// encrypt buffer
+	for (i=0; i<l; i++)
 		kbuf[i] ^= crypter_key;
-	if (copy_to_user((void *)buf, (const void *)kbuf, (unsigned long)len)) {
-		kfree(kbuf);
-		return -3;
+
+	// write kernel buffer back to user space
+	err = copy_to_user((void *)buf, (const void *)kbuf, (unsigned long)l);
+	if (err) {
+		err = -EACCES;
+		goto out;
 	}
+
+out:
 	kfree(kbuf);
-	return 0;
+	return err;
 }
 
 /*
@@ -65,10 +81,15 @@ int ext3301_cryptbuf(char __user * buf, size_t len) {
 bool ext3301_isencrypted(struct dentry * dcheck) {
 	struct dentry * dsearch;
 	struct dentry * dtop = dcheck;
+
+	// Walk along directory entry parents until we hit root (root's parent
+	// 	is itself)
 	do {
 		dsearch = dtop;
 		dtop = dtop->d_parent;
 	} while (dtop != dtop->d_parent);
+
+	// Check if the top directory entry matches the encrypted folder
 	return !(strcmp(crypter_dir, dsearch->d_name.name));
 }
 
@@ -80,6 +101,8 @@ bool ext3301_isencrypted(struct dentry * dcheck) {
  */
 char * ext3301_getpath(struct dentry * dcheck, char * buf, int buflen) {
 	char * s = dentry_path_raw(dcheck, buf, buflen);
+
+	// This is basically just a wrapper for dentry_path_raw
 	if (s==ERR_PTR(-ENAMETOOLONG))
 		return NULL;
 	else
@@ -91,12 +114,13 @@ char * ext3301_getpath(struct dentry * dcheck, char * buf, int buflen) {
 
 /*
  * kernel file open: run filp_open() in the kernel address space.
- *  Returns a file struct pointer on success, Null on failure.
- *  During the open, the address limit of the process is set to that of the
- *   kernel (and then reverted).
- *	Additionally, if the first character in the path is the root slash ('/'),
- *	 it is stripped. This allows the file opening utility to search the set of
- *	 mounted file systems to open from.
+ *
+ * Returns a file struct pointer on success, Null on failure.
+ * During the open, the address limit of the process is set to that of the
+ * 	kernel (and then reverted).
+ * If the first character in the path is the root slash ('/'), it is 
+ *	stripped. This allows the file opening utility to search the set of
+ *	mounted file systems to open from.
  */
 struct file * kfile_open(const char * fpath, int flags) {
 	struct file * f = NULL;
@@ -120,6 +144,7 @@ struct file * kfile_open(const char * fpath, int flags) {
 
 /*
  * kernel file read: run vfs_read() in the kernel address space.
+ *
  *	Return value is directly passed from vfs_read (which gets it from
  *	 the fs-specific read function, in this case ext3301_read).
  *	Negative values indicate an error condition; Positive values indicate
@@ -169,8 +194,3 @@ void kfile_close(struct file * f) {
 	filp_close(f, 0);
 }
 
-//
-//filp->f_path.dentry->d_parent (->d_name.name)
-//	filp->f_path.dentry->d_name.name,
-//	filp->f_path.dentry->d_parent->d_name.name
-//

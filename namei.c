@@ -311,6 +311,11 @@ static int ext2_rmdir (struct inode * dir, struct dentry *dentry)
 	return err;
 }
 
+/*
+ * ext3301: modified to encrypt/decrypt files moving to/from
+ * 	an encrypted folder.
+ * Rename still succeeds if an encrypt/decrypt operation fails.
+ */
 static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 	struct inode * new_dir,	struct dentry * new_dentry )
 {
@@ -321,15 +326,17 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 	struct page * old_page;
 	struct ext2_dir_entry_2 * old_de;
 	int err = -ENOENT;
-	//
+
 	bool is_encryptable, src_encrypt, dest_encrypt;
+	int i;
 	struct file * fcrypt;
-	size_t blocksize;
 	ssize_t nchunk, nread, nwritten;
 	loff_t fpos, fseekpos;
-	int i;
 	unsigned int fsize, fremaining;
 	char * buf, * strbuf1, * strbuf2, * path_src, * path_dest;
+	size_t blocksize = INODE_BLKSIZE(old_inode);
+
+	//
 
 	dquot_initialize(old_dir);
 	dquot_initialize(new_dir);
@@ -370,40 +377,44 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 			inode_inc_link_count(new_dir);
 	}
 
-	// ext3301: check if the source XOR destination lie under /encrypt,
-	// 			and both entries are regular or immediate files
-	blocksize = INODE_BLKSIZE(old_inode);
+	// allocate buffers
 	strbuf1 = kmalloc((size_t)512, GFP_KERNEL);
 	strbuf2 = kmalloc((size_t)512, GFP_KERNEL);
 	buf = kmalloc(blocksize, GFP_KERNEL);
+	if (!buf || !strbuf1 || !strbuf2)
+		return -ENOMEM;
+
+	// check if the source XOR destination lie under /encrypt,
+	// 	and both entries are regular or immediate files
 	is_encryptable = (I_ISIM(old_inode) || I_ISREG(old_inode));
 	src_encrypt = ext3301_isencrypted(old_dentry);
 	dest_encrypt = ext3301_isencrypted(new_dentry);
 	path_src  = ext3301_getpath(old_dentry, strbuf1, blocksize);
 	path_dest = ext3301_getpath(new_dentry, strbuf2, blocksize);
 
-	// ext3301: kernel logging
+	// decide whether to encrypt
 	dbg(KERN_DEBUG "rename (%s --> %s)\n", path_src, path_dest);
 	if (is_encryptable) {
-		dbg_cr(KERN_DEBUG " - File encryptable type (regular/immediate)\n");
+		dbg_cr(KERN_DEBUG "- File encryptable type (regular/immediate)\n");
 		if (src_encrypt && dest_encrypt) {
-			dbg_cr(KERN_DEBUG " - File moving inside /encrypt (no change))\n");
+			dbg_cr(KERN_DEBUG "- File moving inside /encrypt (no change))\n");
 		} else if (src_encrypt) {
-			dbg_cr(KERN_DEBUG " - File moving out of /encrypt. Decrypting..\n");
+			dbg_cr(KERN_DEBUG "- File moving out of /encrypt. Decrypting..\n");
 			goto cryptstart;
 		} else if (dest_encrypt) {
-			dbg_cr(KERN_DEBUG " - File moving into /encrypt. Encrypting..\n");
+			dbg_cr(KERN_DEBUG "- File moving into /encrypt. Encrypting..\n");
 			goto cryptstart;
 		} else {
-			dbg_cr(KERN_DEBUG " - Src/dest directories not encryptable\n");
+			dbg_cr(KERN_DEBUG "- Src/dest directories not encryptable\n");
 		}
 	} else {
-		dbg_cr(KERN_DEBUG " - File not an encryptable type\n");
+		dbg_cr(KERN_DEBUG "- File not an encryptable type\n");
 	}
 	goto cryptdone;
 
-cryptstart:
-	// ext3301: encrypt/decrypt file	
+/* encrypt/decrypt file */
+cryptstart: 
+	// open file
 	if (!path_src)
 		goto cryptfail;
 	fcrypt = kfile_open(path_src, O_RDWR);
@@ -415,17 +426,18 @@ cryptstart:
 	fseekpos = 0;
 	dbg_cr(KERN_DEBUG " - Opened %s (Fsize: %d)\n", 
 		FILP_NAME(fcrypt), fsize);
-	if (!fsize) 
+	// special case: nothing to encrypt
+	if (fsize==0) 
 		goto cryptclose;
+	// loop: read, encrypt, write
 	while (fremaining > 0) {
 		// choose a chunk size
 		nchunk = (fremaining > blocksize ? blocksize : (ssize_t)fremaining);
 		dbg_cr(KERN_DEBUG " - Starting a %d-byte chunk at pos %u.\n", 
 			(int)nchunk, (unsigned int)fpos);
-		// read a chunk
+		// read a chunk; make sure we read all bytes requested.
 		fpos = fseekpos;
 		nread = kfile_read(fcrypt, buf, (size_t)nchunk, &fpos);
-		// check we read a good number of bytes
 		//	this inequality covers error conditions (nread<0) and 
 		//	partial reads (0<=nread<=nchunk && nread != nchunk)
 		if (nread != nchunk) {
@@ -438,16 +450,15 @@ cryptstart:
 		// write the chunk back
 		fpos = fseekpos;
 		nwritten = kfile_write(fcrypt, buf, (size_t)nchunk, &fpos);
-		// check we wrote back successfully
 		if (nwritten != nchunk) {
 			kfile_close(fcrypt);
 			goto cryptfail;
 		}
-		// move the file marker forward, decrease the nbytes remaining
+		// move the file marker forward, decrease the #bytes remaining
 		fseekpos += nchunk;
 		fremaining -= nchunk;
 	}
-	// sync the read/write operations. Very important!
+	// sync the read/write operations to disk. Very important!
 	kfile_sync(fcrypt);
 
 cryptclose:
@@ -455,9 +466,9 @@ cryptclose:
 	goto cryptdone;
 
 cryptfail:
-	// ext3301: encrypt/decrypt failed
+	// encrypt/decrypt failed
 	if (dest_encrypt)
-		printk(KERN_WARNING "Encrypting file entering /%s failed: ino %lu\n",
+		printk(KERN_WARNING "Crypting file entering /%s failed: ino %lu\n",
 				crypter_dir, INODE_INO(old_inode));
 	else if (src_encrypt)
 		printk(KERN_WARNING "Decrypting file leaving /%s failed: ino %lu\n",
@@ -496,7 +507,7 @@ out_old:
 out:
 	return err;
 out_free:
-	// ext3301: free buffers
+	// free buffers
 	kfree(strbuf1);
 	kfree(strbuf2);
 	kfree(buf);
