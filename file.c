@@ -277,13 +277,18 @@ ssize_t ext3301_reg2im(struct file * filp) {
 	// Copy directly from the buffer data segment to our kernel buffer
 	memcpy((void *)data, (const void *)(bh->b_data), (size_t)l);
 
+	dbg_im(KERN_WARNING "GOT DATA: %.*s\n", (int)l, data);
+
 	// Release the paged buffer: unlock, release.
+	flush_dcache_page(bh->b_page);
+	set_buffer_uptodate(bh);
 	unlock_buffer(bh);
 	brelse(bh);
 
 	//Write the kernel buffer into the block pointer area
-	memcpy((void *)INODE_PAYLOAD(i), (const void *)data, (size_t)l);
-
+	//memcpy((void *)INODE_PAYLOAD(i), (const void *)data, (size_t)l);
+	memset((void *)INODE_PAYLOAD(i), 'A', (size_t)l);
+	
 free:
 
 	// Free the block
