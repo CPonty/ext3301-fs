@@ -133,7 +133,7 @@ ssize_t ext3301_write_immediate(struct file * filp, char __user * buf,
 
 /*
  * ext3301 immediate to regular: convert the file type.
- * 	filesize should be > EXT3301_IMMEDIATE_MAX_SIZE.
+ * 	filesize should be > EXT3301_IM_SIZE.
  *	Returns 0 on success, <0 on failure.
  */
 ssize_t ext3301_im2reg(struct file * filp) {
@@ -147,11 +147,18 @@ ssize_t ext3301_im2reg(struct file * filp) {
 
 	dbg_im(KERN_DEBUG "- im2reg l=%d\n", (int)INODE_ISIZE(i));
 
+	// verify the immediate file size
 	if (l > EXT3301_IM_SIZE(i)) {
-		dbg_im(KERN_DEBUG " - Immediate file >60 bytes found!\n");
+		printk(KERN_DEBUG "IM file bad state, size>capacity, ino: %lu\n",
+			INODE_INO(i));
 		return -EIO;
 	}
 
+	// prepare a kernel buffer to store the file contents
+	data = kmalloc((size_t)l, GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+	 
 	// Lock the inode
 	INODE_LOCK(i);
 
@@ -163,8 +170,6 @@ ssize_t ext3301_im2reg(struct file * filp) {
 		goto out;
 
 	// Read the payload (block pointer area) into a buffer
-	if (!(data = kmalloc((size_t)l, GFP_KERNEL)))
-		return -ENOMEM;
 	memcpy((void *)data, (const void *)INODE_PAYLOAD(i), (size_t)l);
 
 	// Zero the block pointer area (otherwise get_block will treat our old
@@ -172,19 +177,19 @@ ssize_t ext3301_im2reg(struct file * filp) {
 	memset((void *)INODE_PAYLOAD(i), 0, (size_t)EXT3301_IM_SIZE(i));
 
 	// Use a buffer head to find the block number (of the first data block)
+	//	'true' option: allocate new blocks with ext2_get_block 
 	search_bh.b_state = 0;
 	search_bh.b_size = blocksize;
 	err = ext2_get_block(i, block_offset, &search_bh, true);
-	//err = ext2_get_block(i, 0, &search_bh, 1);
 	if (err < 0) {
-		dbg_im(KERN_DEBUG " - ext2_get_block() failed\n");
+		dbg_im(KERN_DEBUG "- ext2_get_block() failed\n");
 		goto out;
 	}
 	
 	// Retrieve and lock a paged buffer head to the block number
 	bh = sb_getblk(INODE_SUPER(i), search_bh.b_blocknr);
 	if (bh==NULL) {
-		dbg_im(KERN_DEBUG " - sb_getblk() failed\n");
+		dbg_im(KERN_DEBUG "- sb_getblk() failed\n");
 		err = -EIO;
 		goto out;
 	}
@@ -204,30 +209,98 @@ ssize_t ext3301_im2reg(struct file * filp) {
 out:
 	// Finished - unlock the inode and mark it as dirty.
 	// 	Note we haven't updated the ctime, filesize or anything else.
-	INODE_UNLOCK(i);
+	// 	The subsequent write operation will do this
 	mark_inode_dirty(i);
+	INODE_UNLOCK(i);
+
+	kfree(data);
 	return err;
 }
 
 /*
  * ext3301 regular to immediate: convert the file type.
- * 	filesize should be <= EXT3301_IMMEDIATE_MAX_SIZE.
- *	Returns 0 on success, <0 on failure.
+ *
+ * filesize should be <= EXT3301_IM_SIZE.
+ * There should only be one block in the file, if it is small enough to
+ * 	become an immediate file.
+ * Returns 0 on success, <0 on failure.
  */
 ssize_t ext3301_reg2im(struct file * filp) {
-	ssize_t ret = 0;
+	char * data;
+	struct buffer_head * bh, search_bh;
+	int err = 0;
+	long block_offset = 0;
+	struct inode * i = FILP_INODE(filp);
+	ssize_t l = INODE_ISIZE(i);
+	unsigned long blocksize = INODE_BLKSIZE(i);
 
-	//Lock the inode
-	//Copy the payload (first block) into a kernel buffer
-	//??? Free the first block
-	//??? Zero the block count/fsize
-	//Set the file mode
+	dbg_im(KERN_DEBUG "- reg2im l=%d\n", (int)INODE_ISIZE(i));
+
+	// verify the immediate file size
+	if (l > EXT3301_IM_SIZE(i)) {
+		printk(KERN_DEBUG "IM file bad state, size>capacity, ino: %lu\n",
+			INODE_INO(i));
+		return -EIO;
+	}
+
+	// prepare a kernel buffer to store the file contents
+	data = kmalloc((size_t)l, GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+
+	// Lock the inode
+	INODE_LOCK(i);
+
+	// Special case: file length is zero, go straight to freeing blocks
+	if (l==0)
+		goto free;
+
+	// Use a buffer head to find the block number (of the first data block)
+	// 	'false' option: do not allocate new blocks with ext2_get_block
+	search_bh.b_state = 0;
+	search_bh.b_size = blocksize;
+	err = ext2_get_block(i, block_offset, &search_bh, false);
+	if (err < 0) {
+		dbg_im(KERN_DEBUG "- ext2_get_block() failed\n");
+		goto out;
+	}
+	
+	// Retrieve and lock a paged buffer head to the block number
+	bh = sb_getblk(INODE_SUPER(i), search_bh.b_blocknr);
+	if (bh==NULL) {
+		dbg_im(KERN_DEBUG "- sb_getblk() failed\n");
+		err = -EIO;
+		goto out;
+	}
+	lock_buffer(bh);
+
+	// Copy directly from the buffer data segment to our kernel buffer
+	memcpy((void *)data, (const void *)(bh->b_data), (size_t)l);
+
+	// Release the paged buffer: unlock, release.
+	unlock_buffer(bh);
+	brelse(bh);
+
 	//Write the kernel buffer into the block pointer area
-	//??? Set the fsize
-	//Unlock the inode
-	//??? Return
+	memcpy((void *)INODE_PAYLOAD(i), (const void *)data, (size_t)l);
 
-	return ret;
+free:
+
+	// Free the block
+	//
+	
+	// Set the file type to immediate
+	INODE_MODE(i) = MODE_SET_IM(INODE_MODE(i));
+
+out:
+	// Finished - unlock the inode and mark it as dirty.
+	// 	Note we haven't updated the ctime, filesize or anything else.
+	// 	The previous write operation already did this
+	mark_inode_dirty(i);
+	INODE_UNLOCK(i);
+
+	kfree(data);
+	return err;
 }
 
 // --------------------------------------------------------------------
@@ -294,7 +367,8 @@ ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len,
 	//Immediate file only: Check if it needs to grow into a regular file
 	if (I_ISIM(i) && (*ppos+len > EXT3301_IM_SIZE(i))) {
 		dbg_im(KERN_DEBUG "- IM-->REG conversion\n");
-		if ((ret = ext3301_im2reg(filp)) < 0) {
+		ret = ext3301_im2reg(filp);
+		if (ret < 0) {
 			printk(KERN_DEBUG "IM-->REG conversion fail: ino %lu, err %d\n",
 				INODE_INO(i), (int)ret);
 			return ret;
@@ -320,7 +394,8 @@ ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len,
 	//Regular file only: Check if it's small enough to convert to immediate
 	if (INODE_TYPE(i)==DT_REG && (INODE_ISIZE(i)<=EXT3301_IM_SIZE(i))) {
 		dbg_im(KERN_DEBUG "- REG-->IM conversion\n");
-		if ((ret = ext3301_reg2im(filp)) < 0) {
+		ret = ext3301_reg2im(filp);
+		if (ret < 0) {
 			printk(KERN_DEBUG "REG-->IM file conversion failed: ino %lu\n",
 				INODE_INO(i));
 			return ret;
