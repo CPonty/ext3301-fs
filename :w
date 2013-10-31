@@ -167,49 +167,27 @@ ssize_t ext3301_write_immediate(struct file * filp, char __user * buf,
  */
 ssize_t ext3301_im2reg(struct file * filp) {
 	ssize_t l;
-	ssize_t ret;
 	struct inode * i = FILP_INODE(filp);
 	char * data;
 
-	dbg_im(KERN_WARNING "im2reg l=%d\n", (int)INODE_ISIZE(i));
-	
-	//Special case: file length is zero
-	if (INODE_ISIZE(i)==0) {
-		INODE_LOCK(i);
-		INODE_MODE(i) = MODE_SET_REG(INODE_MODE(i));
-		INODE_UNLOCK(i);
-		mark_inode_dirty(i);
-		return 0;
-	}
-
 	//Lock the inode
 	INODE_LOCK(i);
-
 	//Copy the payload (block pointer area) into a buffer
 	if ((l = INODE_ISIZE(i)) > EXT3301_IM_SIZE(i))
 		return -EIO;
 	if (!(data = kmalloc((size_t)l, GFP_KERNEL)))
 		return -ENOMEM;
 	memcpy((void *)data, (const void *)INODE_PAYLOAD(i), (size_t)l);
-	////Zero the block pointers
-	//memset((void *)INODE_PAYLOAD(i), 0, (size_t)EXT3301_IM_SIZE(i));
-
 	//Set the file type, update mode
 	INODE_MODE(i) = MODE_SET_REG(INODE_MODE(i));
-	//DON'T zero the file length - later when we go to write to blocks,
-	//	it will try and free the page.
-	//INODE_ISIZE(i) = 0;
+	//Zero the file length
+	INODE_ISIZE(i) = 0;
 	//FILP_FSIZE(filp) = 0; //update the file pointer too?
-	//
 	//Unlock the inode
 	INODE_UNLOCK(i);
-
 	//Allocate/write to the first block (hijack symlink function)
-	if ((ret = page_symlink(i, data, l))) {
-		dbg_im(KERN_WARNING "page_symlink failed with %d\n", (int)ret);
-		return ret;
-	}
-
+	if (page_symlink(i, data, l) > 0)
+		return -EIO;
 	//Succeeded - mark node as dirty, return success.
 	mark_inode_dirty(i);
 	return 0;
@@ -298,13 +276,13 @@ ssize_t ext3301_write(struct file * filp, char __user * buf, size_t len,
 
 	//Immediate file only: walk ppos forward manually for Append mode
 	if (I_ISIM(i) && (FILP_FLAGS(filp) & O_APPEND)) {
-		dbg_im(KERN_WARNING "O_APPEND: walking ppos to EoF\n");
+		dbg_im(KERN_DEBUG "O_APPEND: walking ppos to EoF\n");
 		*ppos += INODE_ISIZE(i);
 	}
 
 	//Immediate file only: Check if it needs to grow into a regular file
 	if (I_ISIM(i) && (*ppos+len > EXT3301_IM_SIZE(i))) {
-		dbg_im(KERN_WARNING "- IM-->REG conversion\n");
+		dbg_im(KERN_DEBUG "- IM-->REG conversion\n");
 		if ((ret = ext3301_im2reg(filp)) < 0) {
 			printk(KERN_DEBUG "IM-->REG file conversion failed: ino %lu\n",
 				INODE_INO(i));

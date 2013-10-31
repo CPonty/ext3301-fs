@@ -106,8 +106,8 @@ static int ext2_create (struct inode * dir, struct dentry * dentry, umode_t mode
 	dquot_initialize(dir);
 
 	dbg_im(KERN_DEBUG "Creating file, mode %x\n", mode);
-	if ((mode >> S_SHIFT) == DT_REG) {
-		mode = MODE_SET_IMMEDIATE(mode);
+	if (MODE_TYPE(mode) == DT_REG) {
+		mode = MODE_SET_IM(mode);
 		dbg_im(KERN_DEBUG "- Mode changed (Reg->Im): %x\n", mode);
 	}
 
@@ -376,8 +376,7 @@ static int ext2_rename (struct inode * old_dir, struct dentry * old_dentry,
 	strbuf1 = kmalloc((size_t)512, GFP_KERNEL);
 	strbuf2 = kmalloc((size_t)512, GFP_KERNEL);
 	buf = kmalloc(blocksize, GFP_KERNEL);
-	is_encryptable = (INODE_MODE(old_inode)==DT_IM || \
-					  INODE_MODE(old_inode)==DT_REG);
+	is_encryptable = (I_ISIM(old_inode) || I_ISREG(old_inode));
 	src_encrypt = ext3301_isencrypted(old_dentry);
 	dest_encrypt = ext3301_isencrypted(new_dentry);
 	path_src  = ext3301_getpath(old_dentry, strbuf1, blocksize);
@@ -458,11 +457,11 @@ cryptclose:
 cryptfail:
 	// ext3301: encrypt/decrypt failed
 	if (dest_encrypt)
-		printk(KERN_WARNING "Encrypting file moved to /%s failed\n",
-				crypter_dir);
+		printk(KERN_WARNING "Encrypting file entering /%s failed: ino %lu\n",
+				crypter_dir, INODE_INO(old_inode));
 	else if (src_encrypt)
-		printk(KERN_WARNING "Decrypting file moved from /%s failed\n",
-				crypter_dir);
+		printk(KERN_WARNING "Decrypting file leaving /%s failed: ino %lu\n",
+				crypter_dir, INODE_INO(old_inode));
 	goto cryptdone;
 
 cryptdone:

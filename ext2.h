@@ -848,7 +848,7 @@ extern const char * crypter_dir;
  *	3	Encryption 
  *	4	All
  */
-#define DEBUG 0
+#define DEBUG 2
 
 /*
  * Debug print functions (arguments map directly to printk).
@@ -879,20 +879,30 @@ extern const char * crypter_dir;
 #endif
 
 
-// File and inode struct shortcuts
+// File, inode, mode struct shortcuts
 #define FILP_NAME(f) 		(f->f_path.dentry->d_name.name)
 #define FILP_PARENT(f) 		(f->f_path.dentry->d_parent->d_name.name)
-#define FILP_FSIZE(f) 		(f->f_path.dentry->d_inode->i_size)
-#define FILP_INODE(f) 		(f->f_path.dentry->d_inode)
-#define INODE_MODE(i)		(i->i_mode >> S_SHIFT)
+#define FILP_FSIZE(f) 		(f->f_inode->i_size)
+#define FILP_INODE(f) 		(f->f_inode)
+#define FILP_FLAGS(f) 		(f->f_flags)
+#define FILP_INO(f) 		(f->f_inode->i_ino)
+
+#define INODE_INO(i) 		(i->i_ino)
+#define INODE_ISIZE(i) 		(i->i_size)
+#define INODE_MODE(i)		(i->i_mode)
+#define INODE_TYPE(i)		(i->i_mode >> S_SHIFT)
 #define INODE_LOCK(i)		mutex_lock_nested(&(i->i_mutex), I_MUTEX_QUOTA)
 #define INODE_UNLOCK(i)		mutex_unlock(&(i->i_mutex))
 #define INODE_BLKSIZE(i)	((size_t)(i->i_sb->s_blocksize))
 #define INODE_PAYLOAD(i)	((char*)(EXT2_I(i)->i_data))
 
-#define MODE_SET_IMMEDIATE(m)	((((1 << S_SHIFT)-1) & m) | S_IFIMM)
-#define S_ISIM(m)				((m >> S_SHIFT)==DT_IM)
-
+#define MODE_TYPE(m)		(m >> S_SHIFT)
+#define MODE_SET_IM(m)		((((1 << S_SHIFT)-1) & m) | S_IFIMM)
+#define MODE_SET_REG(m)		((((1 << S_SHIFT)-1) & m) | S_IFREG)
+#define S_ISIM(m)			((m >> S_SHIFT)==DT_IM)
+#define I_ISIM(i)			((i->i_mode >> S_SHIFT)==DT_IM)
+#define I_ISREG(i)			((i->i_mode >> S_SHIFT)==DT_REG)
+#define I_ISMODE(i,m)		((i->i_mode >> S_SHIFT)==m)
 
 #define ext2_set_bit	__test_and_set_bit_le
 #define ext2_clear_bit	__test_and_clear_bit_le
