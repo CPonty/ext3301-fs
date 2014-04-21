@@ -3,7 +3,7 @@ ext3301-fs
 
 **ext2** File System, with immediate files and encryption added. 
 
-Final assignment for UQ's *COMP3301 - Operating Systems Principles* course.
+Final project for UQ's *COMP3301 - Operating Systems Principles* course.
 
 Important files:
 * file.c contains wrappers for file read and write, handling encryption and providing special methods for immediate files.
